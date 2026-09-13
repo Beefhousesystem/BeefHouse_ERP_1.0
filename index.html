@@ -109,6 +109,15 @@
   .pctbl td.pcname.pcedit input{text-align:left;font-weight:700;}
   .pctbl td.pcedit input:focus{outline:2px solid var(--gold);outline-offset:-2px;background:#FFFBEB;}
   .pctbl td.pcdel{text-align:center;width:36px;background:#fff;}
+  /* 订单详情编辑表 */
+  .odtbl{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .odtbl th,.odtbl td{border:1px solid var(--line);padding:5px 7px;}
+  .odtbl thead th{background:#EDF2F9;color:#12203A;font-weight:800;}
+  .odtbl td.c,.odtbl th.c{text-align:center;}
+  .odtbl td.odnum,.odtbl input.odnum{}
+  .odtbl input.odnum{width:100%;border:1px solid var(--line);border-radius:5px;text-align:center;font:inherit;padding:5px 4px;box-sizing:border-box;}
+  .odtbl input.odnum:focus{outline:2px solid var(--gold);outline-offset:-2px;background:#FFFBEB;}
+  .odtbl tfoot td{background:#F2F4F7;}
   /* Invoice 单据 */
   #invoiceDoc{background:#fff;color:#111;padding:18px;font-size:13px;border:1px solid #e2e8f0;border-radius:8px;}
   #invoiceDoc .inv-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:10px;}
@@ -591,7 +600,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0912q";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0912r";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -2237,26 +2246,64 @@ function openOrdersPanel(){
   const list=[...ORDERS].sort((a,b)=>b.ts-a.ts);
   const body=list.length?list.map(o=>{
     const dt=new Date(o.ts);const when=dt.toLocaleString('en-MY',{hour12:false});
-    return `<div class="card" style="padding:10px;margin-bottom:8px;">
+    const cnt=(o.lines||[]).length+(o.uniform||[]).length;
+    const badge=o.status==='confirmed'?`<span class="pill p-g">${LANG==="zh"?"已确认":"Confirmed"}${o.invoiceNo?(' '+o.invoiceNo):''}</span>`:`<span class="pill p-a">${LANG==="zh"?"待确认":"Pending"}</span>`;
+    return `<div class="card" style="padding:10px 12px;margin-bottom:8px;cursor:pointer;" onclick="openOrderDetail('${o.id}')">
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;">
         <div style="font-weight:800;">🧑 ${oEsc(o.by&&o.by.name||'-')} <span class="mini" style="font-weight:400;">(${oEsc(ROLES[o.by&&o.by.role]?ROLES[o.by.role].name:(o.by&&o.by.role||''))})</span></div>
-        <div class="mini">${oEsc(o.outletName||'')} · ${when}</div></div>
-      <div class="mini" style="margin-top:2px;">${o.supplier?`🏢 ${oEsc(o.supplier)} · `:''}${LANG==="zh"?"共":"Total"} ${(o.lines||[]).length+(o.uniform||[]).length} ${LANG==="zh"?"项":"items"}${o.status==='confirmed'?` · <span class="pill p-g">${LANG==="zh"?"已确认":"Confirmed"}${o.invoiceNo?(' '+o.invoiceNo):''}</span>`:` · <span class="pill p-a">${LANG==="zh"?"待确认":"Pending"}</span>`}</div>
-      ${orderLineHTML(o)}
-      <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px;flex-wrap:wrap;">
-        ${canConfirmOrder()&&o.status!=='confirmed'?`<button class="btn brand sm" onclick="confirmOrder('${o.id}')">✅ ${LANG==="zh"?"确认订单":"Confirm"}</button>`:''}
-        ${o.status==='confirmed'?`<button class="btn gold sm" onclick="openInvoice('${o.id}')">🧾 ${LANG==="zh"?"生成 Invoice":"Invoice"}</button>`:''}
-        <button class="btn ghost sm" onclick="deleteOrder('${o.id}')">🗑️ ${LANG==="zh"?"删除":"Delete"}</button>
-      </div>
+        <div class="mini">${when} ›</div></div>
+      <div class="mini" style="margin-top:2px;">${o.supplier?`🏢 ${oEsc(o.supplier)} · `:''}${oEsc(o.outletName||'')} · ${LANG==="zh"?"共":"Total"} ${cnt} ${LANG==="zh"?"项":"items"} · ${badge}</div>
     </div>`;}).join(''):`<div class="empty">${LANG==="zh"?"暂无订单":"No orders yet"}</div>`;
   const perm=('Notification'in window)?Notification.permission:'unsupported';
   const permTxt=perm==='granted'?(LANG==="zh"?'✅ 通知已允许':'✅ granted'):perm==='denied'?(LANG==="zh"?'❌ 通知被拒绝（去浏览器设置里允许）':'❌ denied'):(LANG==="zh"?'尚未开启':'not set');
   const notifBtn=('Notification'in window)?`<button class="btn gold sm" onclick="reqNotify()">🔔 ${LANG==="zh"?"开启/登记本机接收通知":"Enable / register this device"}</button> <span class="mini" id="notifStatus">${permTxt}</span>`:'';
   openForm(`<h3>📥 ${LANG==="zh"?"收到的订单":"Received Orders"} <span class="x" onclick="closeM()">×</span></h3>
     <div style="margin-bottom:8px;">${notifBtn}</div>
-    <div style="max-height:60vh;overflow:auto;">${body}</div>`);
+    <div class="hint" style="margin-top:0;">${LANG==="zh"?"点一张订单进去 → 可改数量/删项/填单价 → 确定订单 → 生成 Invoice。":"Tap an order to edit & confirm."}</div>
+    <div style="max-height:58vh;overflow:auto;">${body}</div>`);
 }
-async function deleteOrder(id){if(!confirm(LANG==="zh"?"删除此订单记录？":"Delete this order?"))return;await loadOrders();ORDERS=ORDERS.filter(o=>o.id!==id);await saveOrders();openOrdersPanel();}
+function orderById(id){return ORDERS.find(o=>o.id===id);}
+function orderTotals(o){let tq=0,ta=0;const add=arr=>(o[arr]||[]).forEach(l=>{const q=+l.q||0,p=+l.price||0;tq+=q;ta+=q*p;});add('lines');add('uniform');return{tq,ta};}
+let _odT=null;
+function orderEditSave(){if(_odT)clearTimeout(_odT);_odT=setTimeout(()=>{_odT=null;saveOrders();},400);}
+function orderEditFlush(){if(_odT){clearTimeout(_odT);_odT=null;return saveOrders();}}
+function setOL(id,arr,i,field,v){const o=orderById(id);if(!o||!o[arr]||!o[arr][i])return;o[arr][i][field]=v;odRecalc(id);orderEditSave();}
+function odRecalc(id){const o=orderById(id);if(!o)return;['lines','uniform'].forEach(arr=>(o[arr]||[]).forEach((l,i)=>{const el=document.getElementById('oda-'+arr+'-'+i);if(el)el.textContent=money((+l.q||0)*(+l.price||0));}));const t=orderTotals(o);const q=document.getElementById('odTQ');if(q)q.textContent=num(t.tq,2);const a=document.getElementById('odTA');if(a)a.textContent=money(t.ta);}
+async function delOL(id,arr,i){const o=orderById(id);if(!o)return;const it=o[arr][i];if(!confirm(LANG==="zh"?("移除『"+String((it.d||('Size '+it.size)||'')).split('\n')[0]+"』？"):"Remove item?"))return;o[arr].splice(i,1);await saveOrders();openOrderDetail(id);}
+function odRow(id,arr,i,name,l){
+  return `<tr>
+    <td>${oEsc(name)}</td>
+    <td class="c"><input class="odnum" inputmode="decimal" value="${oEsc(l.q)}" oninput="setOL('${id}','${arr}',${i},'q',this.value)"></td>
+    <td class="c"><input class="odnum" inputmode="decimal" placeholder="0" value="${oEsc(l.price!=null?l.price:'')}" oninput="setOL('${id}','${arr}',${i},'price',this.value)"></td>
+    <td class="c" id="oda-${arr}-${i}">${money((+l.q||0)*(+l.price||0))}</td>
+    <td class="c"><span class="ib" onclick="delOL('${id}','${arr}',${i})">🗑️</span></td>
+  </tr>`;
+}
+function openOrderDetail(id){
+  const o=orderById(id);if(!o)return;const zh=LANG==="zh";
+  const rows=[
+    ...(o.lines||[]).map((l,i)=>odRow(id,'lines',i,(l.d||'').replace(/\n/g,' / '),l)),
+    ...(o.uniform||[]).map((u,i)=>odRow(id,'uniform',i,(zh?'制服 Uniform · Size ':'Uniform · Size ')+u.size,u))
+  ].join('')||`<tr><td colspan="5" class="c">—</td></tr>`;
+  const t=orderTotals(o);
+  const dt=new Date(o.ts);const when=dt.toLocaleString('en-MY',{hour12:false});
+  const badge=o.status==='confirmed'?`<span class="pill p-g">${zh?"已确认":"Confirmed"} ${o.invoiceNo||''}</span>`:`<span class="pill p-a">${zh?"待确认":"Pending"}</span>`;
+  openForm(`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+      <h3 style="margin:0;">🧾 ${zh?"订单详情":"Order"} <span class="x" onclick="closeM()">×</span></h3>
+      <button class="btn ghost sm" onclick="openOrdersPanel()">← ${zh?"返回列表":"Back"}</button>
+    </div>
+    <div class="mini" style="margin:6px 0;">🧑 ${oEsc(o.by&&o.by.name||'')} · ${o.supplier?oEsc(o.supplier)+' · ':''}${oEsc(o.outletName||'')} · ${when} · ${badge}</div>
+    <div class="hint" style="margin-top:0;">${zh?"货物不够就改数量或🗑️删掉；可填单价算金额。改动自动保存。":"Adjust qty / remove / set price."}</div>
+    <div style="max-height:50vh;overflow:auto;"><table class="odtbl"><thead><tr><th>${zh?"品名":"Item"}</th><th class="c" style="width:64px;">${zh?"数量/重量":"Qty"}</th><th class="c" style="width:70px;">${zh?"单价":"Price"}</th><th class="c" style="width:84px;">${zh?"金额":"Amt"}</th><th class="c" style="width:36px;"></th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr><td style="text-align:right;font-weight:800;">${zh?"合计":"Total"}</td><td class="c" style="font-weight:800;" id="odTQ">${num(t.tq,2)}</td><td></td><td class="c" style="font-weight:800;" id="odTA">${money(t.ta)}</td><td></td></tr></tfoot>
+    </table></div>
+    <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap;">
+      ${o.status!=='confirmed'?`<button class="btn brand sm" onclick="confirmOrder('${o.id}')">✅ ${zh?"确定订单":"Confirm"}</button>`:`<button class="btn gold sm" onclick="openInvoice('${o.id}')">🧾 ${zh?"创建 Invoice":"Create Invoice"}</button>`}
+      <button class="btn ghost sm" onclick="deleteOrder('${o.id}')">🗑️ ${zh?"删除订单":"Delete"}</button>
+    </div>`);
+}
+async function deleteOrder(id){if(!confirm(LANG==="zh"?"删除此订单记录？":"Delete this order?"))return;await orderEditFlush();ORDERS=ORDERS.filter(o=>o.id!==id);await saveOrders();openOrdersPanel();}
 /* 确认订单(仅区域副经理及以上) → 生成 Invoice 编号 */
 function canConfirmOrder(){return ['owner','area'].includes(curRole);}
 function nextInvoiceNo(){
@@ -2266,19 +2313,20 @@ function nextInvoiceNo(){
 }
 async function confirmOrder(id){
   if(!canConfirmOrder()){alert(LANG==="zh"?"只有区域副经理及以上可确认。":"Only Area Manager & above.");return;}
-  if(!confirm(LANG==="zh"?"确认此订单？确认后可生成 Invoice。":"Confirm this order?"))return;
-  await loadOrders();const o=ORDERS.find(x=>x.id===id);if(!o){openOrdersPanel();return;}
+  if(!confirm(LANG==="zh"?"确定此订单？确认后可创建 Invoice。":"Confirm this order?"))return;
+  await orderEditFlush();const o=orderById(id);if(!o){openOrdersPanel();return;}
   o.status='confirmed';if(!o.invoiceNo)o.invoiceNo=nextInvoiceNo();
   o.confirmedBy=curUser?curUser.name:ROLES[curRole].name;o.confirmedAt=Date.now();
   await saveOrders();
   try{if(typeof auditLog==='function')auditLog(LANG==="zh"?"订单确认":"Order confirmed",(o.supplier||o.outletName||'')+" · "+o.invoiceNo,"","");}catch(e){}
-  openOrdersPanel();
+  openOrderDetail(id);
 }
 function invoiceHTML(o){
   const dt=new Date(o.confirmedAt||o.ts);const dstr=dt.toLocaleDateString('en-GB');
   const zh=LANG==="zh";
-  const rows=[...(o.lines||[]).map(l=>({d:l.d,q:l.q})),...(o.uniform||[]).map(u=>({d:(zh?'制服 Uniform · Size ':'Uniform · Size ')+u.size,q:u.q}))];
-  const body=rows.map((r,i)=>`<tr><td class="c">${i+1}</td><td>${oEsc((r.d||'').replace(/\n/g,'<br>'))}</td><td class="c">${oEsc(r.q)}</td><td></td></tr>`).join('')||`<tr><td colspan="4" class="c" style="color:#888;">—</td></tr>`;
+  const rows=[...(o.lines||[]).map(l=>({d:l.d,q:l.q,price:l.price})),...(o.uniform||[]).map(u=>({d:(zh?'制服 Uniform · Size ':'Uniform · Size ')+u.size,q:u.q,price:u.price}))];
+  const t=orderTotals(o);
+  const body=rows.map((r,i)=>{const q=+r.q||0,p=+r.price||0;return `<tr><td class="c">${i+1}</td><td>${oEsc((r.d||'').replace(/\n/g,'<br>'))}</td><td class="c">${oEsc(r.q)}</td><td class="c">${p?money(p):'-'}</td><td class="c">${p?money(q*p):'-'}</td></tr>`;}).join('')||`<tr><td colspan="5" class="c" style="color:#888;">—</td></tr>`;
   return `<div id="invoiceDoc">
     <div class="inv-head">
       <div><div class="inv-co">牛室炙烤牛排 · Beef House</div><div class="inv-sub">${zh?'订货单 / PURCHASE ORDER':'PURCHASE ORDER'}</div></div>
@@ -2290,9 +2338,11 @@ function invoiceHTML(o){
       <div><b>${zh?'下单人 Ordered by':'Ordered by'}:</b> ${oEsc(o.by&&o.by.name||'')} (${oEsc(ROLES[o.by&&o.by.role]?ROLES[o.by.role].name:(o.by&&o.by.role||''))})</div>
       <div><b>${zh?'确认人 Confirmed by':'Confirmed by'}:</b> ${oEsc(o.confirmedBy||'')}</div>
     </div>
-    <table class="inv-tbl"><thead><tr><th class="c" style="width:44px;">No.</th><th>${zh?'品名 Description':'Description'}</th><th class="c" style="width:80px;">${zh?'数量 QTY':'QTY'}</th><th style="width:120px;">${zh?'备注 Remark':'Remark'}</th></tr></thead><tbody>${body}</tbody></table>
+    <table class="inv-tbl"><thead><tr><th class="c" style="width:40px;">No.</th><th>${zh?'品名 Description':'Description'}</th><th class="c" style="width:74px;">${zh?'数量/重量':'Qty'}</th><th class="c" style="width:80px;">${zh?'单价 Price':'Price'}</th><th class="c" style="width:92px;">${zh?'金额 Amount':'Amount'}</th></tr></thead><tbody>${body}</tbody>
+      <tfoot><tr><td></td><td style="text-align:right;font-weight:800;">${zh?'总数量 Total Qty':'Total Qty'}</td><td class="c" style="font-weight:800;">${num(t.tq,2)}</td><td style="text-align:right;font-weight:800;">${zh?'总金额':'Total'}</td><td class="c" style="font-weight:800;">${money(t.ta)}</td></tr></tfoot>
+    </table>
     <div class="inv-foot">
-      <div>${zh?'共':'Total'} ${rows.length} ${zh?'项':'items'}</div>
+      <div>${zh?'共':'Total'} ${rows.length} ${zh?'项':'items'} · ${zh?'总金额':'Grand Total'} <b>${money(t.ta)}</b></div>
       <div class="inv-sign"><div>_______________________<br>${zh?'负责人签名 Authorised':'Authorised'}</div><div>_______________________<br>${zh?'收货签名 Received':'Received'}</div></div>
     </div>
   </div>`;
