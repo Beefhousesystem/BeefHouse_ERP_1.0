@@ -601,7 +601,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0912z";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0913a";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -888,7 +888,7 @@ function seed(outletId){
   ];
   const payables=[];
   const stocktakes = [];
-  const opex={rent:4000,commission:2500,salaries:18500,epf:2405,socso:370,levy:640,ot:1200,electricity:2800,water:420,gas:980,wifi:180,rubbish:150,possaas:220,accounting:400,repair:350};
+  const opex={rent:4000,commission:2500,salaries:18500,epf:2405,socso:370,levy:640,ot:1200,electricity:2800,water:420,gas:980,marketing:0,maintenance:0,wifi:180,rubbish:150,possaas:220,accounting:400,repair:350};
   const fin={posGross:0}; // 旧字段，保留兼容；实际营业额改由 sales 计算
   /* ========== 销售数据层（★ 未来 POS 接口位置 ★）==========
      现在：手动/模拟填每道菜的当月销量。
@@ -1043,7 +1043,7 @@ function buildAggregate(){
   const ids=branchIds();
   const agg={items:[],recipes:[],subRecipes:[],moves:[],vendors:[],payables:[],stocktakes:[],staff:[],sales:[],
     purchases:[],grn:[],transfers:[],staffLoans:[],wasteLog:[],offers:[],monthEnd:[],
-    opex:{rent:0,commission:0,salaries:0,epf:0,socso:0,eis:0,levy:0,ot:0,electricity:0,water:0,gas:0,wifi:0,rubbish:0,possaas:0,accounting:0,repair:0},
+    opex:{rent:0,commission:0,salaries:0,epf:0,socso:0,eis:0,levy:0,ot:0,electricity:0,water:0,gas:0,marketing:0,maintenance:0,wifi:0,rubbish:0,possaas:0,accounting:0,repair:0},
     fin:{posGross:0},audit:[]};
   // 合并库存：同名品项数量与库存值相加，成本用加权
   const itemMap={};const salesMap={};
@@ -1179,7 +1179,7 @@ function auditLog(act,detail,oldv,newv){
 function can(p){return ROLES[curRole].can.includes(p);}
 // 作业中心(proc)只要拥有任一子作业权限即可进入；子页与页面级访问统一由 pageAllowed 判定
 function hasAnyOp(){return ['proc','transfer','waste','ent','stock'].some(p=>can(p));}
-function pageAllowed(p){if(p==='proc')return hasAnyOp();if(p==='monthly')return can('report');if(p==='orderinv')return ['owner','area','manager','headchef'].includes(curRole);if(typeof PROC_SUB!=='undefined'&&PROC_SUB[p])return can(PROC_SUB[p]);return can(p);}
+function pageAllowed(p){if(p==='proc')return hasAnyOp();if(p==='monthly')return can('report');if(p==='opexm')return can('opex');if(p==='orderinv')return ['owner','area','manager','headchef'].includes(curRole);if(typeof PROC_SUB!=='undefined'&&PROC_SUB[p])return can(PROC_SUB[p]);return can(p);}
 function firstAllowedPage(){const order=['dash','attend','leave','payroll','hr','schedule','sales','inv','proc','ck','stock','opex','ap','bom','report','settings'];for(const p of order)if(pageAllowed(p))return p;return 'dash';}
 function canW(p){return can(p)&&!isAgg();} // 汇总视图为只读
 function renderTop(){
@@ -1214,12 +1214,12 @@ function renderTop(){
 // 侧边栏菜单分组（ERP 结构，方便日后扩充）
 const MENU=[
   ["营运 Operations",[["dash","💰","dash"],["sales","🧾","sales"],["proc","🔄","proc"],["orderinv","🧾","orderinv"],["ck","🏭","ck"]]],
-  ["库存 Inventory",[["inv","📦","inv"],["bom","🍲","bom"],["stock","📋","stock"]]],
+  ["库存 Inventory",[["inv","📦","inv"],["bom","🍲","bom"],["stock","📋","stock"],["opexm","💵","opexm"]]],
   ["财务 Finance",[["ap","💳","ap"],["opex","💵","opex"],["monthly","📅","monthly"],["report","📈","report"]]],
   ["人事 HR",[["hr","👤","hr"],["attend","🕐","attend"],["schedule","📅","schedule"],["leave","🌴","leave"],["payroll","💴","payroll"]]],
   ["系统 System",[["settings","⚙️","settings"]]],
 ];
-const MENU_LABELS={sales:{zh:"销售 (POS)",en:"Sales (POS)"},orderinv:{zh:"订单发票",en:"Order Invoices"},ck:{zh:"中央厨房",en:"Central Kitchen"},stock:{zh:"盘点",en:"Stock Take"},hr:{zh:"员工档案",en:"Staff Profiles"},attend:{zh:"打卡考勤",en:"Attendance"},schedule:{zh:"排班",en:"Schedule"},leave:{zh:"请假",en:"Leave"},monthly:{zh:"月度核算",en:"Monthly Cost"},bom:{zh:"配方成本",en:"Recipe Cost"}};
+const MENU_LABELS={sales:{zh:"销售 (POS)",en:"Sales (POS)"},orderinv:{zh:"订单发票",en:"Order Invoices"},ck:{zh:"中央厨房",en:"Central Kitchen"},stock:{zh:"盘点",en:"Stock Take"},hr:{zh:"员工档案",en:"Staff Profiles"},attend:{zh:"打卡考勤",en:"Attendance"},schedule:{zh:"排班",en:"Schedule"},leave:{zh:"请假",en:"Leave"},monthly:{zh:"月度核算",en:"Monthly Cost"},bom:{zh:"配方成本",en:"Recipe Cost"},opexm:{zh:"运营开销录入",en:"OpEx Entry"}};
 function mlabel(p){if(MENU_LABELS[p])return MENU_LABELS[p][LANG];return t(p);}
 function renderSidebar(){
   const html=MENU.map(([grp,items])=>{
@@ -1236,7 +1236,7 @@ async function switchOutlet(){curOutlet=document.getElementById('outletSel').val
   render();}
 function switchRole(){curRole=document.getElementById('roleSel').value;if(!pageAllowed(curPage))curPage=firstAllowedPage();render();}
 function toggleLang(){LANG=LANG==="zh"?"en":"zh";render();}
-function nav(p){curPage=p;if(!['purchase','grn','monthend'].includes(p))selSupplier=null;if(p!=='inv')invSupplier=null;if(p!=='bom')dcSel=null;if(p!=='ap')apSel=null;if(p!=='orderinv'){oiSel=null;oiMonth=null;}const sb=document.getElementById('sidebar');if(sb)sb.classList.remove('open');const bd=document.getElementById('backdrop');if(bd)bd.classList.remove('show');render();window.scrollTo(0,0);}
+function nav(p){curPage=p;if(!['purchase','grn','monthend'].includes(p))selSupplier=null;if(p!=='inv')invSupplier=null;if(p!=='bom')dcSel=null;if(p!=='ap')apSel=null;if(p!=='orderinv'){oiSel=null;oiMonth=null;}if(p!=='opexm')opexMSel=null;const sb=document.getElementById('sidebar');if(sb)sb.classList.remove('open');const bd=document.getElementById('backdrop');if(bd)bd.classList.remove('show');render();window.scrollTo(0,0);}
 
 
 /* ================= M1 利润大盘 ================= */
@@ -1911,6 +1911,8 @@ function pgOpex(){
     [LANG==="zh"?"人工成本":"Labour",[["salaries","薪资总额","Salaries"],["epf","EPF (雇主13%)","EPF"],["socso","SOCSO","SOCSO"],["eis","EIS 就业保险","EIS"],["levy","外劳人头税 Levy","Levy"],["ot","加班费 OT","Overtime"]]],
     [LANG==="zh"?"租金":"Rent",[["rent","店面租金","Rent"],["commission","商场抽成","Commission"]]],
     [LANG==="zh"?"水电煤气":"Utilities",[["electricity","电费 TNB","Electricity"],["water","水费","Water"],["gas","煤气","Gas"]]],
+    [LANG==="zh"?"营销与广告费":"Marketing",[["marketing","营销与广告","Marketing & Ads"]]],
+    [LANG==="zh"?"维修与保养":"Maintenance",[["maintenance","维修与保养","Maintenance"]]],
     [LANG==="zh"?"日常杂费":"Misc",[["wifi","Wi-Fi","Wifi"],["rubbish","垃圾清理","Rubbish"],["possaas","POS 月租","POS SaaS"],["accounting","会计费","Accounting"],["repair","维修","Repair"]]],
   ];
   const total=Object.values(o).reduce((s,v)=>s+(+v||0),0);
@@ -1935,6 +1937,60 @@ function pgOpex(){
     <div class="pl">${rows.map(([k,z,e])=>{const linked=labourKeys.includes(k);const ref=plMap[k];const diff=linked&&Math.round((+o[k]||0))!==Math.round(ref||0);return `<div class="row"><span>${LANG==="zh"?z:e}${linked?` <span class="pill p-b" title="${LANG==="zh"?"可从人事薪资联动":"payroll-linked"}">🔗</span>`:''}</span><b${diff?' style="color:var(--amber)"':''}>${money(o[k])}${diff?`<br><span class="mini">${LANG==="zh"?"薪资":"HR"} ${money(ref)}</span>`:''}</b></div>`;}).join('')}</div>`;
   }).join('')}
   <div class="pl" style="margin-top:12px;"><div class="row tot"><span>${LANG==="zh"?"每月 OpEx 总额":"Total OpEx"}</span><span>${money(total)}</span></div></div>`;
+}
+
+/* ================= 运营开销 · 按月录入（简易版，给店长/员工 key in）================= */
+let opexMSel=null;
+function setOpexMSel(m){opexMSel=m;render();window.scrollTo(0,0);}
+function backOpexM(){opexMSel=null;render();window.scrollTo(0,0);}
+// 录入分组（不含人工成本；人工成本仍由『财务→运营开销』随人事薪资联动）
+function opexMGroups(){const zh=LANG==="zh";return [
+  ["🏠 "+(zh?"租金":"Rent"),[["rent",zh?"店面租金":"Shop Rent"],["commission",zh?"商场抽成":"Mall Commission"]]],
+  ["⚡ "+(zh?"水电煤气":"Utilities"),[["electricity",zh?"电费 TNB":"Electricity TNB"],["water",zh?"水费":"Water"],["gas",zh?"煤气":"Gas"]]],
+  ["📣 "+(zh?"营销与广告费":"Marketing"),[["marketing",zh?"营销与广告 Marketing":"Marketing & Ads"]]],
+  ["🔧 "+(zh?"维修与保养":"Maintenance"),[["maintenance",zh?"维修与保养 Maintenance":"Maintenance"]]],
+  ["🧾 "+(zh?"日常杂费":"Misc"),[["wifi","Wi-Fi"],["rubbish",zh?"垃圾清理":"Rubbish"],["possaas",zh?"POS 月租":"POS SaaS"],["accounting",zh?"会计费":"Accounting"],["repair",zh?"维修杂项":"Repair"]]],
+]; }
+const OPEXM_KEYS=["rent","commission","electricity","water","gas","marketing","maintenance","wifi","rubbish","possaas","accounting","repair"];
+function opexMSubtotal(o){return OPEXM_KEYS.reduce((s,k)=>s+(+o[k]||0),0);}
+function pgOpexM(){
+  const zh=LANG==="zh";const w=canW('opex');
+  // 月份列表：可录入的月份（近月）+ 已有数据的月份
+  const months=availMonths();
+  if(!opexMSel){
+    return `<h2 class="h" style="margin-top:2px;">💵 ${zh?"运营开销录入":"OpEx Entry"} <span class="tag">${zh?"按月":"By Month"}</span></h2>
+    <div class="hint" style="margin-bottom:10px;">${zh?"👉 点一个月份进去，直接 key in 那个月的运营开销（租金、水电、营销、维修、杂费）。填好的数字会自动带进『损益表』和『月度核算』算净利。":"Tap a month, then key in that month's operating expenses. Values flow into the P&L automatically."}</div>
+    <div class="hint" style="margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${zh?"要录入其他月份？":"Another month?"} <input type="month" id="opexmPick" value="${(costMonth||TODAY.slice(0,7))}" style="padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:13px;font-weight:700;background:#fff;color:var(--ink);"><button class="btn ghost sm" onclick="var v=document.getElementById('opexmPick').value; if(v) setOpexMSel(v);">${zh?"进入":"Open"} ›</button></div>
+    <div class="grid g2">${months.map(mm=>{const o=curOpex(mm)||{};const sub=opexMSubtotal(o);const lk=monthLocked(mm);const own=!!(d().opexByMonth&&d().opexByMonth[mm]);return `<div class="kpi" style="cursor:pointer;text-align:left;" onclick="setOpexMSel('${mm}')">
+      <div class="k" style="display:flex;justify-content:space-between;align-items:center;">${monthLabel2(mm)}${lk?' 🔒':(own?'':' <span class="mini" style="font-weight:600;">'+(zh?"未录":"—")+'</span>')}</div>
+      <div class="v sm">${money(sub)}</div>
+      <div class="s mini">${zh?"运营开销小计":"OpEx subtotal"} ›</div></div>`;}).join('')}</div>`;
+  }
+  // 单月录入
+  const m=opexMSel;const locked=monthLocked(m);const o=curOpex(m)||{};const groups=opexMGroups();
+  const sub=opexMSubtotal(o);
+  return `<div class="fb"><h2 class="h" style="margin:0;">💵 ${zh?"运营开销录入":"OpEx Entry"} <span class="tag">${monthLabel2(m)}${locked?' 🔒':''}</span></h2><button class="btn ghost sm" onclick="backOpexM()">← ${zh?"选月份":"Months"}</button></div>
+  <div class="hint" style="margin-bottom:8px;">${zh?"直接在下面 key in 金额（RM），填好按底部『保存本月』。只影响【"+monthLabel2(m)+"】，不会串到别的月。":"Key in the amounts (RM) below and tap Save. Affects "+monthLabel2(m)+" only."}</div>
+  ${locked?`<div class="al al-b" style="margin-bottom:8px;"><div class="t">🔒 ${zh?monthLabel2(m)+" 已月末锁定":"Locked"}</div>${zh?"该月开销已归档固定；如需修改请到『财务→月度核算』解锁。":"Archived; unlock in Monthly."}</div>`:''}
+  ${!w?`<div class="al al-a" style="margin-bottom:8px;"><div class="t">🔒 ${zh?"只读":"Read-only"}</div>${zh?"你的角色或当前视图不能修改运营开销。":"Your role/view cannot edit OpEx."}</div>`:''}
+  ${groups.map(([g,rows])=>{const gsub=rows.reduce((s,[k])=>s+(+o[k]||0),0);return `<h2 class="h">${g} <span class="tag">${money(gsub)}</span></h2>
+    <div class="pl" style="padding:6px 10px;">${rows.map(([k,lbl])=>`<div class="fr" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:6px 0;">
+      <label style="flex:1;font-size:13.5px;">${lbl}</label>
+      <div style="display:flex;align-items:center;gap:4px;"><span class="mini" style="color:var(--muted);">RM</span><input id="oxm_${k}" type="number" inputmode="decimal" step="0.01" min="0" value="${(+o[k]||0)}" ${(locked||!w)?'disabled':''} style="width:120px;text-align:right;padding:8px 9px;border:1.5px solid var(--line);border-radius:8px;font-size:14px;font-weight:700;"></div>
+    </div>`).join('')}</div>`;}).join('')}
+  <div class="pl" style="margin-top:12px;"><div class="row tot"><span>${zh?"本月运营开销小计":"Month OpEx subtotal"}</span><span>${money(sub)}</span></div></div>
+  ${(!locked&&w)?`<button class="btn block brand" style="margin-top:12px;" onclick="saveOpexM()">💾 ${zh?"保存本月":"Save Month"}</button>`:''}`;
+}
+async function saveOpexM(){
+  const m=opexMSel;if(!m)return;
+  if(monthLocked(m))return alert(LANG==="zh"?"本月已锁定。":"Locked.");
+  if(!canW('opex'))return;
+  const o=materializeOpex(m);
+  OPEXM_KEYS.forEach(k=>{const el=document.getElementById('oxm_'+k);if(el)o[k]=+el.value||0;});
+  auditLog("录入OpEx","运营开销录入 "+monthLabel2(m),"",money(opexMSubtotal(o)));
+  await save();
+  alert(LANG==="zh"?("已保存 "+monthLabel2(m)+" 的运营开销：小计 "+money(opexMSubtotal(o))):("Saved "+monthLabel2(m)));
+  render();
 }
 
 /* ================= 人事薪资 Payroll（个人明细）================= */
@@ -3562,7 +3618,7 @@ function pgGRN(){return pgLedger('grn');}
 function pgMonthEnd(){return pgLedger('monthend');}
 
 /* 页面路由补充（ap/opex 不在底部tab，用函数导航） */
-const _pages={dash:pgDash,sales:pgSales,inv:pgInv,proc:pgProc,bom:pgBom,report:pgReport,settings:pgSettings,ap:pgAp,opex:pgOpex,payroll:pgPayroll,hr:pgHR,attend:pgAttend,schedule:pgSchedule,leave:pgLeave,ck:pgCK,stock:pgStock,
+const _pages={dash:pgDash,sales:pgSales,inv:pgInv,proc:pgProc,bom:pgBom,report:pgReport,settings:pgSettings,ap:pgAp,opex:pgOpex,opexm:pgOpexM,payroll:pgPayroll,hr:pgHR,attend:pgAttend,schedule:pgSchedule,leave:pgLeave,ck:pgCK,stock:pgStock,
   purchase:pgPurchase,grn:pgGRN,transfer:pgTransfer,waste2:pgWaste2,offer:pgOffer,monthend:pgMonthEnd,monthly:pgMonthly,ordersheet:pgOrderSheet,orderinv:pgOrderInv};
 function render(){
   if(!pageAllowed(curPage)){curPage=firstAllowedPage();selSupplier=null;} // 权限收紧后自动落到可访问页
