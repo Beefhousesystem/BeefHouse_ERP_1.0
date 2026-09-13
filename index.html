@@ -215,6 +215,7 @@
   .mbg{display:none;position:fixed;inset:0;background:rgba(15,25,45,.5);z-index:100;align-items:flex-end;justify-content:center;}
   .mbg.show{display:flex;}
   .m{background:#fff;width:100%;max-width:560px;border-radius:18px 18px 0 0;padding:18px;max-height:92vh;overflow-y:auto;animation:su .22s;}
+  .m.m-wide{max-width:min(1000px,96vw);}
   @media(min-width:640px){.m{border-radius:16px;margin:auto;}.mbg.show{align-items:center;}}
   .m h3{font-size:16px;color:var(--ink);margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;}
   .m h3 .x{font-size:22px;color:var(--grey);cursor:pointer;line-height:1;}
@@ -600,7 +601,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0912r";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0912s";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -2326,7 +2327,7 @@ function invoiceHTML(o){
   const zh=LANG==="zh";
   const rows=[...(o.lines||[]).map(l=>({d:l.d,q:l.q,price:l.price})),...(o.uniform||[]).map(u=>({d:(zh?'制服 Uniform · Size ':'Uniform · Size ')+u.size,q:u.q,price:u.price}))];
   const t=orderTotals(o);
-  const body=rows.map((r,i)=>{const q=+r.q||0,p=+r.price||0;return `<tr><td class="c">${i+1}</td><td>${oEsc((r.d||'').replace(/\n/g,'<br>'))}</td><td class="c">${oEsc(r.q)}</td><td class="c">${p?money(p):'-'}</td><td class="c">${p?money(q*p):'-'}</td></tr>`;}).join('')||`<tr><td colspan="5" class="c" style="color:#888;">—</td></tr>`;
+  const body=rows.map((r,i)=>{const q=+r.q||0,p=+r.price||0;return `<tr><td class="c">${i+1}</td><td>${oEsc(r.d||'').replace(/\n/g,'<br>')}</td><td class="c">${oEsc(r.q)}</td><td class="c">${p?money(p):'-'}</td><td class="c">${p?money(q*p):'-'}</td></tr>`;}).join('')||`<tr><td colspan="5" class="c" style="color:#888;">—</td></tr>`;
   return `<div id="invoiceDoc">
     <div class="inv-head">
       <div><div class="inv-co">牛室炙烤牛排 · Beef House</div><div class="inv-sub">${zh?'订货单 / PURCHASE ORDER':'PURCHASE ORDER'}</div></div>
@@ -2354,8 +2355,9 @@ function openInvoice(id){
       <h3 style="margin:0;">🧾 Invoice ${oEsc(o.invoiceNo||'')} <span class="x" onclick="closeM()">×</span></h3>
       <button class="btn brand sm" onclick="printInvoice()">🖨️ ${zh?'打印 / 存成 PDF':'Print / Save PDF'}</button>
     </div>
-    <div style="max-height:66vh;overflow:auto;">${invoiceHTML(o)}</div>
+    <div style="max-height:78vh;overflow:auto;">${invoiceHTML(o)}</div>
     <div class="noprint mini" style="margin-top:8px;opacity:.7;">${zh?'手机：点打印后，在打印机选「储存为 PDF / Save as PDF」即可下载到手机。':'Choose Save as PDF to download.'}</div>`);
+  const mb=document.getElementById('mbox');if(mb)mb.classList.add('m-wide');
 }
 function printInvoice(){document.body.classList.add('inv-print');window.print();setTimeout(()=>document.body.classList.remove('inv-print'),500);}
 if(typeof window!=='undefined')window.addEventListener('afterprint',()=>document.body.classList.remove('inv-print'));
@@ -2662,6 +2664,7 @@ function outletOpts(){return OUTLETS.filter(o=>o.id!==curOutlet).map(o=>`<option
 let _editId=null;
 function openM(type,editId){
   _editId=editId||null;
+  {const mb=document.getElementById('mbox');if(mb)mb.classList.remove('m-wide');}
   const F={
     item:`<h3>${LANG==="zh"?"新增品项":"New Item"} <span class="x" onclick="closeM()">×</span></h3>
       <div class="fr"><label>${LANG==="zh"?"品名 中/英":"Name"}</label><input id="i_name" placeholder="鸡腿肉 Chicken Leg"></div>
@@ -2978,7 +2981,7 @@ function backSupplier(){selSupplier=null;ledgerMonth='all';render();window.scrol
 function goProcSub(p){selSupplier=null;nav(p);}
 
 /* ---- 简易表单弹窗（复用既有 #mbox/#mbg，不干扰 openM）---- */
-function openForm(html){document.getElementById('mbox').innerHTML=html;document.getElementById('mbg').classList.add('show');}
+function openForm(html){const mb=document.getElementById('mbox');mb.classList.remove('m-wide');mb.innerHTML=html;document.getElementById('mbg').classList.add('show');}
 
 /* ---- 供应商主档（复用 vendors）---- */
 function supplierList(){return d().vendors||[];}
