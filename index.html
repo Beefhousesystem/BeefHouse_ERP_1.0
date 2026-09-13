@@ -570,7 +570,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0912n";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0912o";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -2122,7 +2122,20 @@ function playBeep(){
     try{if(navigator.vibrate)navigator.vibrate([300,120,300]);}catch(e){}
   }catch(e){}
 }
-function reqNotify(){primeAudio();if(!('Notification'in window)){alert(LANG==="zh"?"此浏览器不支持通知":"Notifications unsupported");return;}Notification.requestPermission().then(p=>{if(p==='granted'){playBeep();try{enablePushSub();}catch(e){}}alert(p==='granted'?(LANG==="zh"?"✅ 已开启通知与提示音，有新订单会响铃并弹出提醒。":"Notifications on."):(LANG==="zh"?"未开启通知（可在浏览器设置里允许）。":"Not granted."));updateBell();});}
+async function reqNotify(){
+  primeAudio();
+  if(!('Notification'in window)){alert(LANG==="zh"?"此浏览器不支持通知":"Notifications unsupported");return;}
+  let p=Notification.permission;
+  if(p!=='granted'){try{p=await Notification.requestPermission();}catch(e){}}
+  if(p!=='granted'){alert(LANG==="zh"?"未开启通知。请到手机/浏览器设置里，允许本网站发送通知后再试。":"Not granted.");updateBell();return;}
+  playBeep();
+  const r=await enablePushSub();
+  const st=document.getElementById('notifStatus');
+  if(r&&r.ok){if(st)st.textContent=LANG==="zh"?'✅ 本机已登记，关掉App也会收到':'✅ registered';alert(LANG==="zh"?"✅ 成功！本机已登记接收后台推送。关掉App也会收到新订单通知+响声。":"✅ Registered for background push.");}
+  else{const why={perm:'通知权限未允许',db:'写入订阅失败：'+(r&&r.msg||''),err:'出错：'+(r&&r.msg||''),unsupported:'此浏览器不支持推送',nocloud:'未连接云端',role:'此角色不接收（仅老板/区域副经理）'}[r&&r.reason]||'未知';
+    alert((LANG==="zh"?"⚠️ 通知已开，但后台推送登记未成功：":"Push register failed: ")+why+(LANG==="zh"?"\n\n（App开着仍会响铃提醒；后台推送需在手机上、且已『加到主画面』再试）":""));}
+  updateBell();
+}
 let _swReg=null;
 function fireNotify(order,extra){
   if(!('Notification'in window)||Notification.permission!=='granted')return;
@@ -2154,15 +2167,18 @@ function notifyNewOrders(silent){
 function urlB64ToUint8Array(b64){const pad='='.repeat((4-b64.length%4)%4);const s=(b64+pad).replace(/-/g,'+').replace(/_/g,'/');const raw=atob(s);const arr=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)arr[i]=raw.charCodeAt(i);return arr;}
 async function enablePushSub(){
   try{
-    if(!('serviceWorker'in navigator)||!('PushManager'in window)||!VAPID_PUBLIC||!AUTH())return;
-    if(!['owner','area'].includes(curRole))return;
-    if(!('Notification'in window)||Notification.permission!=='granted')return;
+    if(!('serviceWorker'in navigator)||!('PushManager'in window))return{ok:false,reason:'unsupported'};
+    if(!VAPID_PUBLIC||!AUTH())return{ok:false,reason:'nocloud'};
+    if(!['owner','area'].includes(curRole))return{ok:false,reason:'role'};
+    if(!('Notification'in window)||Notification.permission!=='granted')return{ok:false,reason:'perm'};
     const reg=_swReg||await navigator.serviceWorker.ready;
     let sub=await reg.pushManager.getSubscription();
     if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlB64ToUint8Array(VAPID_PUBLIC)});
     const j=sub.toJSON();
-    await _sb.from('erp_push_subs').upsert({endpoint:j.endpoint,sub:j,email:(curUser&&curUser.email)||'',role:curRole,updated_at:new Date().toISOString()},{onConflict:'endpoint'});
-  }catch(e){}
+    const {error}=await _sb.from('erp_push_subs').upsert({endpoint:j.endpoint,sub:j,email:(curUser&&curUser.email)||'',role:curRole,updated_at:new Date().toISOString()},{onConflict:'endpoint'});
+    if(error)return{ok:false,reason:'db',msg:error.message};
+    return{ok:true};
+  }catch(e){return{ok:false,reason:'err',msg:String(e&&e.message||e)};}
 }
 async function sendOrderPush(order){
   try{
@@ -2208,7 +2224,9 @@ function openOrdersPanel(){
       ${orderLineHTML(o)}
       <div style="text-align:right;margin-top:6px;"><button class="btn ghost sm" onclick="deleteOrder('${o.id}')">🗑️ ${LANG==="zh"?"删除":"Delete"}</button></div>
     </div>`;}).join(''):`<div class="empty">${LANG==="zh"?"暂无订单":"No orders yet"}</div>`;
-  const notifBtn=('Notification'in window&&Notification.permission!=='granted')?`<button class="btn gold sm" onclick="reqNotify()">🔔 ${LANG==="zh"?"开启手机/浏览器通知":"Enable notifications"}</button>`:'';
+  const perm=('Notification'in window)?Notification.permission:'unsupported';
+  const permTxt=perm==='granted'?(LANG==="zh"?'✅ 通知已允许':'✅ granted'):perm==='denied'?(LANG==="zh"?'❌ 通知被拒绝（去浏览器设置里允许）':'❌ denied'):(LANG==="zh"?'尚未开启':'not set');
+  const notifBtn=('Notification'in window)?`<button class="btn gold sm" onclick="reqNotify()">🔔 ${LANG==="zh"?"开启/登记本机接收通知":"Enable / register this device"}</button> <span class="mini" id="notifStatus">${permTxt}</span>`:'';
   openForm(`<h3>📥 ${LANG==="zh"?"收到的订单":"Received Orders"} <span class="x" onclick="closeM()">×</span></h3>
     <div style="margin-bottom:8px;">${notifBtn}</div>
     <div style="max-height:60vh;overflow:auto;">${body}</div>`);
