@@ -603,7 +603,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0913c";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0913d";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -3343,7 +3343,9 @@ async function setGridInv(mod,sup,date,val){const k=mod+'|'+sup+'|'+date;d().gri
 async function setGridUom(mod,sup,item,val){const c=ensureGridCat(sup).find(x=>x.name===item);if(c)c.uom=val;(d()[ledgerCfg(mod).arr]||[]).forEach(r=>{if(r.supplier===sup&&r.item===item)r.uom=val;});gridSave(mod,sup);}
 async function setGridName(mod,sup,oldName,val){const nn=(val||'').trim();if(!nn||nn===oldName)return;const cat=ensureGridCat(sup);if(cat.some(c=>c.name===nn))return alert(LANG==="zh"?"已有同名品项":"Name exists");const c=cat.find(x=>x.name===oldName);if(c)c.name=nn;(d()[ledgerCfg(mod).arr]||[]).forEach(r=>{if(r.supplier===sup&&r.item===oldName)r.item=nn;});await save();render();}
 async function setGridCode(mod,sup,item,val){const c=ensureGridCat(sup).find(x=>x.name===item);if(c)c.code=(val||'').trim();(d()[ledgerCfg(mod).arr]||[]).forEach(r=>{if(r.supplier===sup&&r.item===item)r.code=(val||'').trim();});gridSave(mod,sup);}
-function gridDates(mod,sup,month){const[y,m]=month.split('-').map(Number);const last=new Date(y,m,0).getDate();const res=[];for(let dd=1;dd<=last;dd++)res.push(month+'-'+String(dd).padStart(2,'0'));return res;} // 整月每一天（每天进货）
+function gridDates(mod,sup,month){const[y,m]=month.split('-').map(Number);const last=new Date(y,m,0).getDate();
+  if(mod==='monthend')return [month+'-'+String(last).padStart(2,'0')]; // 月末盘点：只在当月最后一天盘一次
+  const res=[];for(let dd=1;dd<=last;dd++)res.push(month+'-'+String(dd).padStart(2,'0'));return res;} // 整月每一天（每天进货）
 function gridRec(mod,sup,item,date){const arr=d()[ledgerCfg(mod).arr]||[];return arr.find(r=>r.supplier===sup&&r.item===item&&r.date===date);}
 /* 只更新合计、不重画整表 → 输入即时不卡顿 */
 function gridRecalc(mod,sup){
