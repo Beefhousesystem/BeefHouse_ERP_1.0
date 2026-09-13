@@ -9,7 +9,7 @@ self.addEventListener('push', event => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch (e) { data = { body: event.data && event.data.text() }; }
   const title = data.title || '🔔 新订单 New Order';
-  const options = { body: data.body || '', tag: data.tag || 'order', data: { url: data.url || './' } };
+  const options = { body: data.body || '', tag: data.tag || 'order', renotify: true, requireInteraction: true, vibrate: [300, 120, 300, 120, 300], data: { url: data.url || './' } };
   if (data.icon) { options.icon = data.icon; options.badge = data.icon; }
   event.waitUntil(self.registration.showNotification(title, options));
 });

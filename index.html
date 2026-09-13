@@ -570,7 +570,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0912l";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0912m";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -2110,11 +2110,16 @@ function setNotified(m){try{localStorage.setItem(ordNotifKey(),JSON.stringify(m)
 function orderUnreadCount(){if(!['owner','area'].includes(curRole))return 0;const seen=+(localStorage.getItem(ordSeenKey())||0);return ORDERS.filter(o=>o.ts>seen).length;}
 function markOrdersSeen(){const latest=ORDERS.reduce((m,o)=>Math.max(m,o.ts),0);localStorage.setItem(ordSeenKey(),String(latest));updateBell();}
 function updateBell(){const bell=document.getElementById('bellBtn');if(!bell)return;const show=['owner','area'].includes(curRole);bell.style.display=show?'':'none';const n=orderUnreadCount();const bc=document.getElementById('bellCount');if(bc){bc.style.display=n?'':'none';bc.textContent=n>99?'99+':n;}}
-/* 提示音：三声上升“叮叮叮”（WebAudio，无需音频文件）*/
+/* 提示音：一声“叮”，响亮 + 约2秒余音（像手机信息提示，WebAudio，无需音频文件）*/
 function primeAudio(){try{_audioCtx=_audioCtx||new (window.AudioContext||window.webkitAudioContext)();if(_audioCtx.state==='suspended')_audioCtx.resume();}catch(e){}}
 function playBeep(){
-  try{primeAudio();if(!_audioCtx)return;const now=_audioCtx.currentTime;
-    [[880,0],[1175,0.16],[1568,0.32]].forEach(([f,t])=>{const o=_audioCtx.createOscillator(),g=_audioCtx.createGain();o.connect(g);g.connect(_audioCtx.destination);o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(0.0001,now+t);g.gain.exponentialRampToValueAtTime(0.4,now+t+0.02);g.gain.exponentialRampToValueAtTime(0.0001,now+t+0.15);o.start(now+t);o.stop(now+t+0.17);});
+  try{primeAudio();if(!_audioCtx)return;const ctx=_audioCtx,now=ctx.currentTime;
+    const master=ctx.createGain();master.connect(ctx.destination);
+    master.gain.setValueAtTime(0.0001,now);
+    master.gain.exponentialRampToValueAtTime(0.85,now+0.015);   // 响亮起音
+    master.gain.exponentialRampToValueAtTime(0.0001,now+2.0);   // 约2秒余音
+    [[988,1],[1319,0.55],[1976,0.28]].forEach(([f,v])=>{const o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=f;g.gain.value=v;o.connect(g);g.connect(master);o.start(now);o.stop(now+2.05);});
+    try{if(navigator.vibrate)navigator.vibrate([300,120,300]);}catch(e){}
   }catch(e){}
 }
 function reqNotify(){primeAudio();if(!('Notification'in window)){alert(LANG==="zh"?"此浏览器不支持通知":"Notifications unsupported");return;}Notification.requestPermission().then(p=>{if(p==='granted'){playBeep();try{enablePushSub();}catch(e){}}alert(p==='granted'?(LANG==="zh"?"✅ 已开启通知与提示音，有新订单会响铃并弹出提醒。":"Notifications on."):(LANG==="zh"?"未开启通知（可在浏览器设置里允许）。":"Not granted."));updateBell();});}
@@ -2124,7 +2129,7 @@ function fireNotify(order,extra){
   const more=(extra&&extra>1)?(LANG==="zh"?(' 等'+extra+'单'):(' +'+(extra-1))):'';
   const title=(LANG==="zh"?'🔔 新订单 New Order':'🔔 New Order')+more;
   const body=(order.by&&order.by.name||'')+' · '+(order.supplier?order.supplier+' · ':'')+order.outletName+' · '+((order.lines||[]).length+(order.uniform||[]).length)+(LANG==="zh"?' 项':' items');
-  const opt={body,tag:'order-'+order.id,renotify:true};if(BH_ICON){opt.icon=BH_ICON;opt.badge=BH_ICON;}
+  const opt={body,tag:'order-'+order.id,renotify:true,requireInteraction:true,vibrate:[300,120,300]};if(BH_ICON){opt.icon=BH_ICON;opt.badge=BH_ICON;}
   try{
     if(_swReg&&_swReg.showNotification){_swReg.showNotification(title,opt);}   // 手机(Android/已安装)前台可弹
     else{new Notification(title,opt);}                                          // 桌面浏览器
