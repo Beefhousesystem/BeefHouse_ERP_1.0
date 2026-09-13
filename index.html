@@ -556,7 +556,7 @@ const ROLES={
     can:["dash","sales","inv","proc","transfer","ck","stock","waste","ent","bom","ap","opex","report","hr","attend","schedule","leave","payroll","settings"],
     allBranch:true, hrScope:"all", salaryView:"total", approveLeave:true, canEditPerms:true}, // 全权：人力财务只看总数(不看个人薪水)
   manager:{name:"店长 Manager",en:"Manager",
-    can:["dash","inv","proc","stock","waste","opex","report"],
+    can:["dash","inv","proc","stock","waste","opex","report","ap"],
     allBranch:false, hrScope:"branch", salaryView:"self", approveLeave:true}, // 本店采购/盘点/损耗/OpEx录入 + 本店报表
   headchef:{name:"厨师长 Head Chef",en:"Head Chef",
     can:["dash","inv","ck","transfer","stock"],
@@ -601,7 +601,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0912t";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0912u";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -1234,7 +1234,7 @@ async function switchOutlet(){curOutlet=document.getElementById('outletSel').val
   render();}
 function switchRole(){curRole=document.getElementById('roleSel').value;if(!pageAllowed(curPage))curPage=firstAllowedPage();render();}
 function toggleLang(){LANG=LANG==="zh"?"en":"zh";render();}
-function nav(p){curPage=p;if(!['purchase','grn','monthend'].includes(p))selSupplier=null;if(p!=='inv')invSupplier=null;if(p!=='bom')dcSel=null;const sb=document.getElementById('sidebar');if(sb)sb.classList.remove('open');const bd=document.getElementById('backdrop');if(bd)bd.classList.remove('show');render();window.scrollTo(0,0);}
+function nav(p){curPage=p;if(!['purchase','grn','monthend'].includes(p))selSupplier=null;if(p!=='inv')invSupplier=null;if(p!=='bom')dcSel=null;if(p!=='ap')apSel=null;const sb=document.getElementById('sidebar');if(sb)sb.classList.remove('open');const bd=document.getElementById('backdrop');if(bd)bd.classList.remove('show');render();window.scrollTo(0,0);}
 
 
 /* ================= M1 利润大盘 ================= */
@@ -1468,38 +1468,84 @@ function pgProc(){
 function var_green(){return"#2E7D46";}function var_blue(){return"#2A5FA0";}function var_navy(){return"#12203A";}function var_red(){return"#B23A3A";}function var_amber(){return"#C08A2E";}function var_purple(){return"#6B4E9E";}function var_teal(){return"#0F5C4E";}
 function setMF(f){moveFilter=f;render();}
 
-/* ================= 应付账款 M2 ================= */
-function pgAp(){
-  const x=d();
-  const zh=LANG==="zh";
-  const rawLeft=p=>Math.round((new Date(p.due)-new Date(TODAY))/86400000);
-  const remind=p=>{ if(p.status==="已付")return `<span class="pill p-g">${zh?"已付":"Paid"}</span>`;
-    const L=rawLeft(p);
-    if(L<0)return `<span class="pill p-r">${zh?"逾期 "+(-L)+" 天":"Overdue "+(-L)+"d"}</span>`;
-    if(L===0)return `<span class="pill p-r">${zh?"今天到期":"Due today"}</span>`;
-    if(L<=3)return `<span class="pill p-a">${zh?"还有 "+L+" 天":L+"d left"}</span>`;
-    if(L<=7)return `<span class="pill p-a">${zh?"还有 "+L+" 天":L+"d left"}</span>`;
-    return `<span class="pill p-n">${zh?"还有 "+L+" 天":L+"d left"}</span>`; };
-  const unpaid=x.payables.filter(p=>p.status!=="已付");
-  const totalDue=unpaid.reduce((s,p)=>s+(p.amt-(p.paid||0)),0);
-  const soon=unpaid.filter(p=>rawLeft(p)<=7).length;
-  return `<div class="fb"><h2 class="h" style="margin:0;">💳 ${zh?"应付账款":"Payables"}</h2><div style="display:flex;gap:6px;">${canW('proc')?`<button class="btn gold sm" onclick="openM('payable')">+ ${zh?"应付款":"Payable"}</button>`:''}<button class="btn ghost sm" onclick="nav('proc')">← ${zh?"返回":"Back"}</button></div></div>
-  <div class="hint">${zh?"功能：记录还没付给供应商的钱，系统帮你倒数还有几天要付。付款方式分 现金 / 每周结 / 每月结 / 自定账期。":"Track money owed to suppliers with due-date reminders."}</div>
-  <div class="grid g2" style="margin-bottom:10px;">
-    <div class="kpi"><div class="k">${zh?"未付总额":"Total Owed"}</div><div class="v sm ${totalDue>0?'neg':''}">${money(totalDue)}</div></div>
-    <div class="kpi"><div class="k">${zh?"7天内到期":"Due ≤7 days"}</div><div class="v sm ${soon?'neg':''}">${soon} ${zh?"笔":""}</div></div>
-  </div>
-  <div class="card tbl"><table><thead><tr><th>${zh?"供应商":"Vendor"}</th><th>${zh?"付款方式":"Mode"}</th><th>${zh?"金额":"Amt"}</th><th>${zh?"到期":"Due"}</th><th>${zh?"提醒":"Reminder"}</th>${canW('proc')?'<th></th>':''}</tr></thead><tbody>
-  ${x.payables.slice().sort((a,b)=>new Date(a.due)-new Date(b.due)).map(p=>{
-    return `<tr><td><b>${p.vendor}</b>${p.po&&p.po!=='-'?`<br><span class="mini">${p.po}</span>`:''}${p.note?`<br><span class="mini">${p.note}</span>`:''}</td><td><span class="pill p-n">${p.mode||(zh?"账期":"Term")}</span></td><td>${money(p.amt)}${p.paid?`<br><span class="mini">${zh?"已付":"paid"} ${money(p.paid)}</span>`:''}</td><td class="mini">${p.due}</td><td>${remind(p)}</td>${canW('proc')?`<td style="white-space:nowrap;">${p.status!=='已付'?`<button class="btn sm brand" onclick="payAP(${p.id})">${zh?"标记已付":"Pay"}</button> `:''}<button class="ib" onclick="delPayable(${p.id})">🗑️</button></td>`:''}</tr>`;
-  }).join('')||`<tr><td colspan="${canW('proc')?6:5}" class="empty">${zh?"暂无应付款，点『+ 应付款』添加":"No payables"}</td></tr>`}
-  </tbody></table></div>
-  <div class="fb" style="margin-top:16px;"><h2 class="h" style="margin:0;">🏢 ${LANG==="zh"?"供应商管理":"Vendors"}</h2>${canW('proc')?`<button class="btn gold sm" onclick="openM('vendor')">+ ${LANG==="zh"?"供应商":"Vendor"}</button>`:''}</div>
-  <div class="card tbl"><table><thead><tr><th>${LANG==="zh"?"供应商":"Vendor"}</th><th>${LANG==="zh"?"账期":"Terms"}</th>${canW('proc')?`<th>${LANG==="zh"?"操作":"Action"}</th>`:''}</tr></thead><tbody>
-  ${x.vendors.map(v=>`<tr><td><b>${v.name}</b></td><td>${v.terms} ${LANG==="zh"?"天":"days"}</td>${canW('proc')?`<td><button class="ib" onclick="openM('vendor',${v.id})">✏️</button> <button class="ib" onclick="delVendor(${v.id})">🗑️</button></td>`:''}</tr>`).join('')}
-  </tbody></table></div>`;
+/* ================= 应付账款（对账 + 付款；以订货单确认后的 Invoice 为准）================= */
+let apSel=null;
+function setApSel(s){apSel=s;render();window.scrollTo(0,0);}
+function backAp(){apSel=null;render();window.scrollTo(0,0);}
+function apSupOf(o){return o.supplier||'(中央)TCY OKR SB';}
+function apOrders(){return (typeof ORDERS!=='undefined'?ORDERS:[]).filter(o=>o&&o.status==='confirmed'&&o.outlet===curOutlet);}
+function apPaidMap(){d().apPaid=d().apPaid||{};return d().apPaid;}
+function apIsPaid(sup){const m=apPaidMap()[sup];return !!(m&&m.paid);}
+function apCanWrite(){return canW('ap');}
+function apCanUnpay(){return ['owner','area'].includes(curRole)&&!isAgg();}
+function apItems(o){return [...(o.lines||[]).map(l=>({name:(l.d||'').replace(/\n/g,' / '),q:l.q,price:l.price})),...(o.uniform||[]).map(u=>({name:(LANG==="zh"?'制服 Size ':'Uniform Size ')+u.size,q:u.q,price:u.price}))];}
+async function apTogglePaid(sup){
+  const paid=apIsPaid(sup);const who=curUser?curUser.name:ROLES[curRole].name;
+  if(paid){ if(!apCanUnpay()){alert(LANG==="zh"?"已确认『已付款』后，只有区域副经理及以上才能改回。":"Only Area Manager & above can revert.");return;}
+    if(!confirm(LANG==="zh"?("改回『未付款』？— "+sup):"Mark as UNPAID?"))return;
+    apPaidMap()[sup]={paid:false,by:who,at:Date.now()};
+  }else{ if(!apCanWrite()){alert(LANG==="zh"?"无权限。":"No permission.");return;}
+    if(!confirm(LANG==="zh"?("确认已付款？确认后店长不能改回（需区域副经理及以上）。— "+sup):"Confirm PAID?"))return;
+    apPaidMap()[sup]={paid:true,by:who,at:Date.now()};
+  }
+  await save();try{if(typeof auditLog==='function')auditLog(LANG==="zh"?"应付状态":"AP paid",sup+" · "+(apIsPaid(sup)?"已付款":"未付款")+" · "+who,"","");}catch(e){}
+  render();
 }
-async function payAP(id){const p=d().payables.find(x=>x.id===id);if(!p)return;p.status="已付";p.paid=p.amt;auditLog("应付付款",p.vendor+" "+p.po,money(p.amt-(p.paid||0)),"已付清");await save();render();}
+function apPaidBtn(sup){const paid=apIsPaid(sup);const m=apPaidMap()[sup];
+  return `<button class="btn sm" style="${paid?'background:var(--green);color:#fff;':'background:#d92d20;color:#fff;'}" onclick="event.stopPropagation();apTogglePaid('${gEsc(sup)}')">${paid?(LANG==="zh"?'✅ 已付款':'Paid'):(LANG==="zh"?'⚠️ 未付款':'Unpaid')}</button>${paid&&m&&m.by?`<div class="mini" style="text-align:right;opacity:.6;">${oEsc(m.by)}</div>`:''}`;
+}
+async function setApRec(id,i,v){const o=orderById(id);if(!o)return;o.reconcile=o.reconcile||{};o.reconcile[i]=(o.reconcile[i]===v?'':v);await saveOrders();render();}
+async function apConfirmCorrect(id){const o=orderById(id);if(!o)return;if(!confirm(LANG==="zh"?"确认此单已和实体 Invoice 核对无误？":"Confirm this order is correct?"))return;o.reconciled=true;o.reconciledBy=curUser?curUser.name:ROLES[curRole].name;o.reconciledAt=Date.now();await saveOrders();render();}
+async function apReReconcile(id){const o=orderById(id);if(!o)return;if(!['owner','area'].includes(curRole)){alert(LANG==="zh"?"已核对后仅区域副经理及以上可重开。":"Only Area+ can re-open.");return;}o.reconciled=false;await saveOrders();render();}
+function pgAp(){
+  const zh=LANG==="zh";const w=apCanWrite();
+  if(isAgg())return `<div class="fb"><h2 class="h" style="margin:0;">💳 ${zh?"应付账款":"Payables"}</h2></div><div class="hint">${zh?"请在右上角切换到某一分店查看该店的应付账款。":"Switch to a branch."}</div>`;
+  const all=apOrders();
+  // 分组：供应商 → 该店已确认的 Invoice 列表
+  const groups={};all.forEach(o=>{const s=apSupOf(o);(groups[s]=groups[s]||[]).push(o);});
+  const sups=Object.keys(groups).sort();
+  // —— 供应商列表 ——
+  if(!apSel){
+    let owed=0,unpaidN=0;sups.forEach(s=>{if(!apIsPaid(s)){unpaidN++;groups[s].forEach(o=>owed+=orderTotals(o).ta);}});
+    const cards=sups.map(s=>{const ords=groups[s];const tot=ords.reduce((a,o)=>a+orderTotals(o).ta,0);const paid=apIsPaid(s);
+      return `<div class="card" style="padding:13px;margin-bottom:9px;cursor:pointer;" onclick="setApSel('${s.replace(/'/g,"\\'")}')">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div><div style="font-weight:800;font-size:15px;">🏢 ${oEsc(s)}</div>
+          <div class="mini">${ords.length} ${zh?"张 Invoice":"invoices"} · ${money(tot)}</div></div>
+          <div style="text-align:right;">${apPaidBtn(s)}</div>
+        </div></div>`;}).join('')||`<div class="empty">${zh?"暂无已确认的订单。请先在『采购进销 → 订货单』下单并确认。":"No confirmed invoices yet."}</div>`;
+    return `<div class="fb"><h2 class="h" style="margin:0;">💳 ${zh?"应付账款":"Payables"} <span class="tag">${nm(outletObj())}</span></h2><button class="btn ghost sm" onclick="nav('proc')">← ${zh?"返回":"Back"}</button></div>
+      <div class="hint">${zh?"点供应商 → 看该店的 Invoice（来自订货单确认后自动生成）→ 逐项核对(✔/✗)→ 按『订单正确』→ 付款后按『未付款』改为已付款。":"Tap a supplier to reconcile invoices & mark paid."}</div>
+      <div class="grid g2" style="margin-bottom:10px;">
+        <div class="kpi"><div class="k">${zh?"未付供应商":"Unpaid vendors"}</div><div class="v sm ${unpaidN?'neg':''}">${unpaidN}</div></div>
+        <div class="kpi"><div class="k">${zh?"未付总额":"Total unpaid"}</div><div class="v sm ${owed>0?'neg':''}">${money(owed)}</div></div>
+      </div>
+      ${cards}`;
+  }
+  // —— 单一供应商：Invoice 对账 ——
+  const ords=(groups[apSel]||[]).slice().sort((a,b)=>(b.confirmedAt||b.ts)-(a.confirmedAt||a.ts));
+  const head=`<div class="fb"><h2 class="h" style="margin:0;">💳 ${oEsc(apSel)}</h2><div style="display:flex;gap:6px;align-items:center;">${apPaidBtn(apSel)}<button class="btn ghost sm" onclick="backAp()">← ${zh?"供应商列表":"Suppliers"}</button></div></div>`;
+  const blocks=ords.map(o=>{
+    const items=apItems(o);const t=orderTotals(o);const dt=new Date(o.confirmedAt||o.ts).toLocaleDateString('en-GB');
+    const rows=items.map((it,i)=>{const rec=(o.reconcile||{})[i];const q=+it.q||0,p=+it.price||0;
+      return `<tr><td>${oEsc(it.name)}</td><td class="c">${oEsc(it.q)}</td><td class="c">${p?money(p):'-'}</td><td class="c">${p?money(q*p):'-'}</td>
+        <td class="c" style="white-space:nowrap;">
+          <span class="ib" style="${rec==='ok'?'background:#dcfce7;border-color:#16a34a;':''}" onclick="setApRec('${o.id}',${i},'ok')">✔</span>
+          <span class="ib" style="${rec==='x'?'background:#fee2e2;border-color:#dc2626;':''}" onclick="setApRec('${o.id}',${i},'x')">✗</span>
+        </td></tr>`;}).join('');
+    const badCnt=items.filter((it,i)=>(o.reconcile||{})[i]==='x').length;
+    const foot=o.reconciled
+      ? `<div class="pill p-g">${zh?"✅ 订单正确":"Correct"}${o.reconciledBy?(' · '+oEsc(o.reconciledBy)):''}</div>${['owner','area'].includes(curRole)?`<button class="btn ghost sm" onclick="apReReconcile('${o.id}')">${zh?"重新核对":"Re-open"}</button>`:''}`
+      : `${w?`<button class="btn brand sm" onclick="apConfirmCorrect('${o.id}')">✅ ${zh?"订单正确":"Order Correct"}</button>`:''}${badCnt?`<span class="mini neg">${zh?("有 "+badCnt+" 项打叉"):badCnt+" flagged"}</span>`:''}`;
+    return `<div class="card" style="padding:12px;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center;">
+        <div style="font-weight:800;">🧾 ${oEsc(o.invoiceNo||'-')}</div>
+        <div class="mini">${dt} · ${zh?"下单":"by"} ${oEsc(o.by&&o.by.name||'')} · ${zh?"金额":"Total"} ${money(t.ta)}</div></div>
+      <div style="overflow:auto;margin-top:6px;"><table class="odtbl"><thead><tr><th>${zh?"品名":"Item"}</th><th class="c" style="width:70px;">${zh?"数量":"Qty"}</th><th class="c" style="width:80px;">${zh?"单价":"Price"}</th><th class="c" style="width:90px;">${zh?"金额":"Amt"}</th><th class="c" style="width:96px;">${zh?"核对":"Check"}</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;">${foot}</div>
+    </div>`;}).join('')||`<div class="empty">${zh?"此供应商暂无已确认 Invoice。":"No invoices."}</div>`;
+  return head+`<div class="hint">${zh?"把这里的 Invoice 和你手上的实体单逐项核对：对的按✔、不对/缺货按✗，全部核对后按『订单正确』。付款后在右上角把『未付款』改成『已付款』。":"Reconcile each item, then Order Correct; mark paid at top-right."}</div>${blocks}`;
+}
 
 /* ================= M7 配方成本（可编辑菜品成本表 + 单独算）================= */
 let dcSel=null, dcSearch='';
