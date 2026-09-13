@@ -226,6 +226,8 @@
   .seg button.active{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08);}
   .hint{background:#EAF1F9;border-radius:9px;padding:9px 11px;font-size:11.5px;color:#1c3d63;line-height:1.5;margin-bottom:10px;}
   .empty{text-align:center;padding:24px;color:var(--grey);font-size:12.5px;}
+  details.alertBox summary::-webkit-details-marker{display:none;}
+  details.alertBox summary::marker{content:"";}
   .fb{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:9px;flex-wrap:wrap;}
   /* sidebar */
   .layout{display:flex;min-height:calc(100vh - 44px);}
@@ -601,7 +603,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0913a";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0913b";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -1364,19 +1366,19 @@ function pgDash(){
   </tbody></table></div>
   `;
 }
-function renderAlerts(){
-  const x=d();let a='';
+function alertList(){
+  const x=d();const out=[];
   // 死货 / 临期 FIFO
   x.items.forEach(i=>{
-    (i.batches||[]).forEach(b=>{const dleft=days(b.exp,TODAY);if(dleft<=3)a+=`<div class="al al-r"><div class="t">🔴 ${LANG==="zh"?"临期批次":"Expiring"}：${i.name}</div>${b.qty}${i.unit} ${LANG==="zh"?"将于":"expires"} ${b.exp} ${LANG==="zh"?"到期（"+dleft+"天）→ 优先使用(FIFO)":""}</div>`;});
+    (i.batches||[]).forEach(b=>{const dleft=days(b.exp,TODAY);if(dleft<=3)out.push(`<div class="al al-r"><div class="t">🔴 ${LANG==="zh"?"临期批次":"Expiring"}：${i.name}</div>${b.qty}${i.unit} ${LANG==="zh"?"将于":"expires"} ${b.exp} ${LANG==="zh"?"到期（"+dleft+"天）→ 优先使用(FIFO)":""}</div>`);});
   });
   // 低于安全库存
-  x.items.filter(i=>i.qty<=i.par).forEach(i=>a+=`<div class="al al-a"><div class="t">🟡 ${LANG==="zh"?"低于安全库存":"Below Par"}：${i.name}</div>${LANG==="zh"?"剩":"Left"} ${i.qty}${i.unit}（Par ${i.par}）→ ${LANG==="zh"?"建议订货":"Reorder"} ${Math.max(0,Math.round(i.par*1.5-i.qty))}${i.unit}</div>`);
+  x.items.filter(i=>i.qty<=i.par).forEach(i=>out.push(`<div class="al al-a"><div class="t">🟡 ${LANG==="zh"?"低于安全库存":"Below Par"}：${i.name}</div>${LANG==="zh"?"剩":"Left"} ${i.qty}${i.unit}（Par ${i.par}）→ ${LANG==="zh"?"建议订货":"Reorder"} ${Math.max(0,Math.round(i.par*1.5-i.qty))}${i.unit}</div>`));
   // 应付到期
-  x.payables.filter(p=>p.status!=="已付"&&days(p.due,TODAY)<=5).forEach(p=>a+=`<div class="al al-b"><div class="t">🔵 ${LANG==="zh"?"应付账款即将到期":"Payable Due"}：${p.vendor}</div>${money(p.amt-(p.paid||0))} ${LANG==="zh"?"于":"due"} ${p.due} ${LANG==="zh"?"到期":""}</div>`);
-  // 成本波动（示范：沙白得率低）
-  return a||`<div class="empty">✅ ${LANG==="zh"?"目前没有需要注意的问题":"All clear"}</div>`;
+  x.payables.filter(p=>p.status!=="已付"&&days(p.due,TODAY)<=5).forEach(p=>out.push(`<div class="al al-b"><div class="t">🔵 ${LANG==="zh"?"应付账款即将到期":"Payable Due"}：${p.vendor}</div>${money(p.amt-(p.paid||0))} ${LANG==="zh"?"于":"due"} ${p.due} ${LANG==="zh"?"到期":""}</div>`));
+  return out;
 }
+function renderAlerts(){const a=alertList();return a.join('')||`<div class="empty">✅ ${LANG==="zh"?"目前没有需要注意的问题":"All clear"}</div>`;}
 
 /* ================= M2 库存（按供应商分组）================= */
 /* 品项→供应商 映射（来自导入的营运档案目录）*/
@@ -1423,9 +1425,14 @@ function pgInv(){
     }).join('')||`<div class="empty">${zh?"暂无品项，先在采购或此页导入。":"No items"}</div>`;
     return `<div class="fb"><h2 class="h" style="margin:0;">📦 ${zh?"库存清单":"Inventory"} <span class="tag">${nm(outletObj())}</span></h2>${addBtns}</div>
       <div class="hint">${zh?"👉 功能：看每样食材还剩多少、值多少钱(按供应商分组)。进货会自动加、卖出/报废/调拨会自动减，剩太少会提醒你订货。":"See how much of each item is left & its value; auto-adjusts on purchase/sale/waste."}</div>
-      <h2 class="h" style="margin-top:2px;">⚠️ ${zh?"需要注意":"Alerts"}</h2>
-      ${renderAlerts()}
-      <h2 class="h">${zh?"库存(按供应商)":"Inventory by Supplier"}</h2>
+      ${(function(){const al=alertList();const n=al.length;return `<details class="alertBox"${n?'':' '} style="margin:2px 0 6px;">
+        <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border:1.5px solid ${n?'var(--amber)':'var(--line)'};border-radius:10px;background:${n?'rgba(245,158,11,.08)':'#fff'};font-weight:800;font-size:14px;">
+          <span>⚠️ ${zh?"需要注意":"Alerts"} ${n?`<span class="pill p-r">${n}</span>`:`<span class="mini" style="font-weight:600;color:var(--muted);">${zh?"无":"none"}</span>`}</span>
+          <span class="mini" style="color:var(--muted);">${zh?"点开查看 ▾":"tap ▾"}</span>
+        </summary>
+        <div style="padding-top:8px;">${renderAlerts()}</div>
+      </details>`;})()}
+      <h2 class="h" style="margin-top:2px;">${zh?"库存(按供应商)":"Inventory by Supplier"}</h2>
       ${cards}`;
   }
   // —— 单一供应商库存视图 ——
