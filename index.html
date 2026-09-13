@@ -570,7 +570,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0912m";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0912n";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -2167,9 +2167,11 @@ async function enablePushSub(){
 async function sendOrderPush(order){
   try{
     if(!PUSH_FN_URL||!AUTH())return;
+    let token=SUPABASE_ANON_KEY;
+    try{const {data}=await _sb.auth.getSession();if(data&&data.session&&data.session.access_token)token=data.session.access_token;}catch(e){} // 用登录令牌，Verify JWT 开着也能通过
     const title=(LANG==="zh"?'🔔 新订单 New Order':'🔔 New Order');
     const body=(order.by&&order.by.name||'')+' · '+(order.supplier?order.supplier+' · ':'')+order.outletName+' · '+((order.lines||[]).length+(order.uniform||[]).length)+(LANG==="zh"?' 项':' items');
-    await fetch(PUSH_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY,'apikey':SUPABASE_ANON_KEY},body:JSON.stringify({title,body,icon:BH_ICON})});
+    await fetch(PUSH_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token,'apikey':SUPABASE_ANON_KEY},body:JSON.stringify({title,body,icon:BH_ICON})});
   }catch(e){}
 }
 function startOrderPoll(){if(_ordPollT)clearInterval(_ordPollT);if(!CLOUD)return;_ordPollT=setInterval(async()=>{if(!['owner','area'].includes(curRole))return;await loadOrders();notifyNewOrders();},10000);}
