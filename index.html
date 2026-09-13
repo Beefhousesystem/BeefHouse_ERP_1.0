@@ -109,6 +109,27 @@
   .pctbl td.pcname.pcedit input{text-align:left;font-weight:700;}
   .pctbl td.pcedit input:focus{outline:2px solid var(--gold);outline-offset:-2px;background:#FFFBEB;}
   .pctbl td.pcdel{text-align:center;width:36px;background:#fff;}
+  /* Invoice 单据 */
+  #invoiceDoc{background:#fff;color:#111;padding:18px;font-size:13px;border:1px solid #e2e8f0;border-radius:8px;}
+  #invoiceDoc .inv-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:10px;}
+  #invoiceDoc .inv-co{font-size:18px;font-weight:800;}
+  #invoiceDoc .inv-sub{font-size:12px;color:#555;letter-spacing:1px;}
+  #invoiceDoc .inv-meta{text-align:right;font-size:12px;white-space:nowrap;}
+  #invoiceDoc .inv-info{display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;font-size:12px;margin-bottom:10px;}
+  #invoiceDoc .inv-tbl{width:100%;border-collapse:collapse;font-size:12px;}
+  #invoiceDoc .inv-tbl th,#invoiceDoc .inv-tbl td{border:1px solid #333;padding:6px 8px;vertical-align:top;}
+  #invoiceDoc .inv-tbl th{background:#eef2f7;}
+  #invoiceDoc .inv-tbl td.c,#invoiceDoc .inv-tbl th.c{text-align:center;}
+  #invoiceDoc .inv-foot{margin-top:12px;font-size:12px;}
+  #invoiceDoc .inv-sign{display:flex;justify-content:space-between;gap:20px;margin-top:40px;text-align:center;}
+  @media print{
+    body.inv-print>*{display:none !important;}
+    body.inv-print #mbg{display:block !important;position:static !important;background:#fff !important;padding:0 !important;}
+    body.inv-print #mbg .m{position:static !important;transform:none !important;box-shadow:none !important;max-width:100% !important;width:100% !important;max-height:none !important;margin:0 !important;border:0 !important;padding:0 !important;overflow:visible !important;}
+    body.inv-print #mbg .m>div{max-height:none !important;overflow:visible !important;}
+    body.inv-print .noprint{display:none !important;}
+    body.inv-print #invoiceDoc{border:0 !important;}
+  }
   .gtbl td.gtot{background:#FAFBFC;font-weight:700;text-align:right;padding:6px 8px;}
   .gtbl tr.gsum td{background:#F2F4F7;font-weight:800;padding:6px 8px;}
   .gtbl td.gdate,.gtbl th.gdate{position:sticky;left:0;z-index:2;min-width:64px;max-width:64px;text-align:center;box-shadow:1px 0 0 #333;background:#fff;}
@@ -570,7 +591,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0912p";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0912q";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -2220,9 +2241,13 @@ function openOrdersPanel(){
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;">
         <div style="font-weight:800;">🧑 ${oEsc(o.by&&o.by.name||'-')} <span class="mini" style="font-weight:400;">(${oEsc(ROLES[o.by&&o.by.role]?ROLES[o.by.role].name:(o.by&&o.by.role||''))})</span></div>
         <div class="mini">${oEsc(o.outletName||'')} · ${when}</div></div>
-      <div class="mini" style="margin-top:2px;">${o.supplier?`🏢 ${oEsc(o.supplier)} · `:''}${LANG==="zh"?"共":"Total"} ${(o.lines||[]).length+(o.uniform||[]).length} ${LANG==="zh"?"项":"items"}</div>
+      <div class="mini" style="margin-top:2px;">${o.supplier?`🏢 ${oEsc(o.supplier)} · `:''}${LANG==="zh"?"共":"Total"} ${(o.lines||[]).length+(o.uniform||[]).length} ${LANG==="zh"?"项":"items"}${o.status==='confirmed'?` · <span class="pill p-g">${LANG==="zh"?"已确认":"Confirmed"}${o.invoiceNo?(' '+o.invoiceNo):''}</span>`:` · <span class="pill p-a">${LANG==="zh"?"待确认":"Pending"}</span>`}</div>
       ${orderLineHTML(o)}
-      <div style="text-align:right;margin-top:6px;"><button class="btn ghost sm" onclick="deleteOrder('${o.id}')">🗑️ ${LANG==="zh"?"删除":"Delete"}</button></div>
+      <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px;flex-wrap:wrap;">
+        ${canConfirmOrder()&&o.status!=='confirmed'?`<button class="btn brand sm" onclick="confirmOrder('${o.id}')">✅ ${LANG==="zh"?"确认订单":"Confirm"}</button>`:''}
+        ${o.status==='confirmed'?`<button class="btn gold sm" onclick="openInvoice('${o.id}')">🧾 ${LANG==="zh"?"生成 Invoice":"Invoice"}</button>`:''}
+        <button class="btn ghost sm" onclick="deleteOrder('${o.id}')">🗑️ ${LANG==="zh"?"删除":"Delete"}</button>
+      </div>
     </div>`;}).join(''):`<div class="empty">${LANG==="zh"?"暂无订单":"No orders yet"}</div>`;
   const perm=('Notification'in window)?Notification.permission:'unsupported';
   const permTxt=perm==='granted'?(LANG==="zh"?'✅ 通知已允许':'✅ granted'):perm==='denied'?(LANG==="zh"?'❌ 通知被拒绝（去浏览器设置里允许）':'❌ denied'):(LANG==="zh"?'尚未开启':'not set');
@@ -2232,6 +2257,58 @@ function openOrdersPanel(){
     <div style="max-height:60vh;overflow:auto;">${body}</div>`);
 }
 async function deleteOrder(id){if(!confirm(LANG==="zh"?"删除此订单记录？":"Delete this order?"))return;await loadOrders();ORDERS=ORDERS.filter(o=>o.id!==id);await saveOrders();openOrdersPanel();}
+/* 确认订单(仅区域副经理及以上) → 生成 Invoice 编号 */
+function canConfirmOrder(){return ['owner','area'].includes(curRole);}
+function nextInvoiceNo(){
+  const day=new Date().toLocaleDateString('en-CA').replace(/-/g,'');
+  const n=ORDERS.filter(o=>o.invoiceNo&&o.invoiceNo.indexOf('INV-'+day)===0).length+1;
+  return 'INV-'+day+'-'+String(n).padStart(3,'0');
+}
+async function confirmOrder(id){
+  if(!canConfirmOrder()){alert(LANG==="zh"?"只有区域副经理及以上可确认。":"Only Area Manager & above.");return;}
+  if(!confirm(LANG==="zh"?"确认此订单？确认后可生成 Invoice。":"Confirm this order?"))return;
+  await loadOrders();const o=ORDERS.find(x=>x.id===id);if(!o){openOrdersPanel();return;}
+  o.status='confirmed';if(!o.invoiceNo)o.invoiceNo=nextInvoiceNo();
+  o.confirmedBy=curUser?curUser.name:ROLES[curRole].name;o.confirmedAt=Date.now();
+  await saveOrders();
+  try{if(typeof auditLog==='function')auditLog(LANG==="zh"?"订单确认":"Order confirmed",(o.supplier||o.outletName||'')+" · "+o.invoiceNo,"","");}catch(e){}
+  openOrdersPanel();
+}
+function invoiceHTML(o){
+  const dt=new Date(o.confirmedAt||o.ts);const dstr=dt.toLocaleDateString('en-GB');
+  const zh=LANG==="zh";
+  const rows=[...(o.lines||[]).map(l=>({d:l.d,q:l.q})),...(o.uniform||[]).map(u=>({d:(zh?'制服 Uniform · Size ':'Uniform · Size ')+u.size,q:u.q}))];
+  const body=rows.map((r,i)=>`<tr><td class="c">${i+1}</td><td>${oEsc((r.d||'').replace(/\n/g,'<br>'))}</td><td class="c">${oEsc(r.q)}</td><td></td></tr>`).join('')||`<tr><td colspan="4" class="c" style="color:#888;">—</td></tr>`;
+  return `<div id="invoiceDoc">
+    <div class="inv-head">
+      <div><div class="inv-co">牛室炙烤牛排 · Beef House</div><div class="inv-sub">${zh?'订货单 / PURCHASE ORDER':'PURCHASE ORDER'}</div></div>
+      <div class="inv-meta"><div><b>No.</b> ${oEsc(o.invoiceNo||'-')}</div><div><b>${zh?'日期':'Date'}:</b> ${dstr}</div></div>
+    </div>
+    <div class="inv-info">
+      <div><b>${zh?'供应商 Supplier':'Supplier'}:</b> ${oEsc(o.supplier||(zh?'中央厨房订货表':'Central Kitchen'))}</div>
+      <div><b>${zh?'分店 Outlet':'Outlet'}:</b> ${oEsc(o.outletName||'')}</div>
+      <div><b>${zh?'下单人 Ordered by':'Ordered by'}:</b> ${oEsc(o.by&&o.by.name||'')} (${oEsc(ROLES[o.by&&o.by.role]?ROLES[o.by.role].name:(o.by&&o.by.role||''))})</div>
+      <div><b>${zh?'确认人 Confirmed by':'Confirmed by'}:</b> ${oEsc(o.confirmedBy||'')}</div>
+    </div>
+    <table class="inv-tbl"><thead><tr><th class="c" style="width:44px;">No.</th><th>${zh?'品名 Description':'Description'}</th><th class="c" style="width:80px;">${zh?'数量 QTY':'QTY'}</th><th style="width:120px;">${zh?'备注 Remark':'Remark'}</th></tr></thead><tbody>${body}</tbody></table>
+    <div class="inv-foot">
+      <div>${zh?'共':'Total'} ${rows.length} ${zh?'项':'items'}</div>
+      <div class="inv-sign"><div>_______________________<br>${zh?'负责人签名 Authorised':'Authorised'}</div><div>_______________________<br>${zh?'收货签名 Received':'Received'}</div></div>
+    </div>
+  </div>`;
+}
+function openInvoice(id){
+  const o=ORDERS.find(x=>x.id===id);if(!o)return;
+  const zh=LANG==="zh";
+  openForm(`<div class="noprint" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap;">
+      <h3 style="margin:0;">🧾 Invoice ${oEsc(o.invoiceNo||'')} <span class="x" onclick="closeM()">×</span></h3>
+      <button class="btn brand sm" onclick="printInvoice()">🖨️ ${zh?'打印 / 存成 PDF':'Print / Save PDF'}</button>
+    </div>
+    <div style="max-height:66vh;overflow:auto;">${invoiceHTML(o)}</div>
+    <div class="noprint mini" style="margin-top:8px;opacity:.7;">${zh?'手机：点打印后，在打印机选「储存为 PDF / Save as PDF」即可下载到手机。':'Choose Save as PDF to download.'}</div>`);
+}
+function printInvoice(){document.body.classList.add('inv-print');window.print();setTimeout(()=>document.body.classList.remove('inv-print'),500);}
+if(typeof window!=='undefined')window.addEventListener('afterprint',()=>document.body.classList.remove('inv-print'));
 
 /* ---------- 订货单（按供应商，无照片，风格同中央厨房订货表）---------- */
 function isCkOrderSup(s){return (s||'').toUpperCase().includes('TCY OKR');}
