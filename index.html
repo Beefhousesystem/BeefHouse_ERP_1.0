@@ -570,7 +570,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0912o";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0912p";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -3314,7 +3314,7 @@ async function doAuthSignup(){
   const email=fv('au_email'),pw=fv('au_pw');const m=document.getElementById('au_msg');
   if(!email||!pw){if(m)m.innerHTML='⚠️ '+(LANG==="zh"?"请输入邮箱和密码（至少6位）":"Enter email & password (≥6)");return;}
   if(m)m.textContent=LANG==="zh"?"注册中…":"Signing up…";
-  try{const {data,error}=await _sb.auth.signUp({email,password:pw,options:{emailRedirectTo:'https://yxchong3.github.io/BeefHouse_ERP_1.0/'}});
+  try{const {data,error}=await _sb.auth.signUp({email,password:pw,options:{emailRedirectTo:(location.origin+location.pathname)}});
     if(error){if(m)m.innerHTML='❌ '+error.message;return;}
     if(data.session&&data.user){await afterAuth(data.user);}
     else{if(m)m.innerHTML='✅ '+(LANG==="zh"?"注册成功。若开启了邮箱确认，请查收邮件确认后再登录。":"Signed up. Confirm email if required, then sign in.");}
@@ -3337,7 +3337,7 @@ async function doAuthSignup(){
       email,
       password: pw,
       options: {
-        emailRedirectTo: 'https://yxchong3.github.io/BeefHouse_ERP_1.0/',
+        emailRedirectTo: (location.origin+location.pathname),
         data: {
           invite_code: code // 将邀请码打包传给 Supabase 触发器
         }
