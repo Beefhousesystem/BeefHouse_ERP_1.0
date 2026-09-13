@@ -603,7 +603,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0913b";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0913c";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -1216,19 +1216,19 @@ function renderTop(){
 // 侧边栏菜单分组（ERP 结构，方便日后扩充）
 const MENU=[
   ["营运 Operations",[["dash","💰","dash"],["sales","🧾","sales"],["proc","🔄","proc"],["orderinv","🧾","orderinv"],["ck","🏭","ck"]]],
-  ["库存 Inventory",[["inv","📦","inv"],["bom","🍲","bom"],["stock","📋","stock"],["opexm","💵","opexm"]]],
+  ["库存 Inventory",[["inv","📦","inv"],["bom","🍲","bom"],["monthend","📋","monthend"],["opexm","💵","opexm"]]],
   ["财务 Finance",[["ap","💳","ap"],["opex","💵","opex"],["monthly","📅","monthly"],["report","📈","report"]]],
   ["人事 HR",[["hr","👤","hr"],["attend","🕐","attend"],["schedule","📅","schedule"],["leave","🌴","leave"],["payroll","💴","payroll"]]],
   ["系统 System",[["settings","⚙️","settings"]]],
 ];
-const MENU_LABELS={sales:{zh:"销售 (POS)",en:"Sales (POS)"},orderinv:{zh:"订单发票",en:"Order Invoices"},ck:{zh:"中央厨房",en:"Central Kitchen"},stock:{zh:"盘点",en:"Stock Take"},hr:{zh:"员工档案",en:"Staff Profiles"},attend:{zh:"打卡考勤",en:"Attendance"},schedule:{zh:"排班",en:"Schedule"},leave:{zh:"请假",en:"Leave"},monthly:{zh:"月度核算",en:"Monthly Cost"},bom:{zh:"配方成本",en:"Recipe Cost"},opexm:{zh:"运营开销录入",en:"OpEx Entry"}};
+const MENU_LABELS={sales:{zh:"销售 (POS)",en:"Sales (POS)"},orderinv:{zh:"订单发票",en:"Order Invoices"},ck:{zh:"中央厨房",en:"Central Kitchen"},stock:{zh:"盘点",en:"Stock Take"},hr:{zh:"员工档案",en:"Staff Profiles"},attend:{zh:"打卡考勤",en:"Attendance"},schedule:{zh:"排班",en:"Schedule"},leave:{zh:"请假",en:"Leave"},monthly:{zh:"月度核算",en:"Monthly Cost"},bom:{zh:"配方成本",en:"Recipe Cost"},opexm:{zh:"运营开销录入",en:"OpEx Entry"},monthend:{zh:"月末盘点",en:"Month-End Count"}};
 function mlabel(p){if(MENU_LABELS[p])return MENU_LABELS[p][LANG];return t(p);}
 function renderSidebar(){
   const html=MENU.map(([grp,items])=>{
     const visible=items.filter(([p])=>pageAllowed(p));
     if(!visible.length)return '';
     return `<div class="grp">${grp}</div>`+visible.map(([p,ic])=>
-      `<button class="${p===curPage?'active':''}" onclick="nav('${p}')"><span class="si">${ic}</span>${mlabel(p)}</button>`).join('');
+      `<button class="${p===curPage?'active':''}" onclick="${p==='monthend'?"goProcSub('monthend')":`nav('${p}')`}"><span class="si">${ic}</span>${mlabel(p)}</button>`).join('');
   }).join('');
   document.getElementById('sidebar').innerHTML=html;
 }
@@ -1458,7 +1458,7 @@ function pgProc(){
   if(can('transfer'))cards.push(["transfer","🔁",LANG==="zh"?"跨店调拨":"Transfer",LANG==="zh"?"物品调拨 + 人力借调":"Items + staff loans",var_navy()]);
   if(can('waste'))cards.push(["waste2","🗑",LANG==="zh"?"报废损耗":"Wastage",LANG==="zh"?"成本×数量 · 原因备注":"Cost × qty · reason",var_red()]);
   if(can('ent'))cards.push(["offer","🎁",LANG==="zh"?"招待 / 赠送":"Offers",LANG==="zh"?"ENT/Offer · 负责人":"ENT/Offer · in-charge",var_amber()]);
-  if(can('stock'))cards.push(["monthend","🧮",LANG==="zh"?"月末算货":"Month-End",LANG==="zh"?"按供应商 · 月末结存":"Supplier · month-end",var_teal()]);
+  // 月末盘点已移到侧栏「库存」组（原盘点位置），此处不再重复卡片
   return `
   <h2 class="h" style="margin-top:2px;">🔄 ${LANG==="zh"?"进销存作业":"Operations"} <span class="tag">${nm(outletObj())}</span></h2>
   <div class="hint">${LANG==="zh"?"每个作业已拆分为独立界面，点选进入。":"Each operation now has its own dedicated page."}</div>
@@ -3326,7 +3326,7 @@ function itemSummary(recs){
 function ledgerCfg(mod){return ({
   purchase:{arr:'purchases',icon:"📥",title:LANG==="zh"?"进货单":"Goods-In",hasSettle:false,byMonth:false,form:'formLedger'},
   grn:{arr:'grn',icon:"📋",title:LANG==="zh"?"验收 / 退货/补货":"GRN / Returns",hasSettle:true,byMonth:false,form:'formLedger'},
-  monthend:{arr:'monthEnd',icon:"🧮",title:LANG==="zh"?"月末算货":"Month-End Count",hasSettle:false,byMonth:true,form:'formLedger'},
+  monthend:{arr:'monthEnd',icon:"📋",title:LANG==="zh"?"月末盘点":"Month-End Count",hasSettle:false,byMonth:true,form:'formLedger'},
 })[mod];}
 
 /* ===== 按供应商·按月 整表录入(网格) ===== */
