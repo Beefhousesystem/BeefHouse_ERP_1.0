@@ -601,7 +601,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0912s";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0912t";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -2295,7 +2295,7 @@ function openOrderDetail(id){
     </div>
     <div class="mini" style="margin:6px 0;">🧑 ${oEsc(o.by&&o.by.name||'')} · ${o.supplier?oEsc(o.supplier)+' · ':''}${oEsc(o.outletName||'')} · ${when} · ${badge}</div>
     <div class="hint" style="margin-top:0;">${zh?"货物不够就改数量或🗑️删掉；可填单价算金额。改动自动保存。":"Adjust qty / remove / set price."}</div>
-    <div style="max-height:50vh;overflow:auto;"><table class="odtbl"><thead><tr><th>${zh?"品名":"Item"}</th><th class="c" style="width:64px;">${zh?"数量/重量":"Qty"}</th><th class="c" style="width:70px;">${zh?"单价":"Price"}</th><th class="c" style="width:84px;">${zh?"金额":"Amt"}</th><th class="c" style="width:36px;"></th></tr></thead>
+    <div style="max-height:66vh;overflow:auto;"><table class="odtbl"><thead><tr><th>${zh?"品名":"Item"}</th><th class="c" style="width:88px;">${zh?"数量/重量":"Qty"}</th><th class="c" style="width:96px;">${zh?"单价":"Price"}</th><th class="c" style="width:110px;">${zh?"金额":"Amt"}</th><th class="c" style="width:44px;"></th></tr></thead>
       <tbody>${rows}</tbody>
       <tfoot><tr><td style="text-align:right;font-weight:800;">${zh?"合计":"Total"}</td><td class="c" style="font-weight:800;" id="odTQ">${num(t.tq,2)}</td><td></td><td class="c" style="font-weight:800;" id="odTA">${money(t.ta)}</td><td></td></tr></tfoot>
     </table></div>
@@ -2303,6 +2303,7 @@ function openOrderDetail(id){
       ${o.status!=='confirmed'?`<button class="btn brand sm" onclick="confirmOrder('${o.id}')">✅ ${zh?"确定订单":"Confirm"}</button>`:`<button class="btn gold sm" onclick="openInvoice('${o.id}')">🧾 ${zh?"创建 Invoice":"Create Invoice"}</button>`}
       <button class="btn ghost sm" onclick="deleteOrder('${o.id}')">🗑️ ${zh?"删除订单":"Delete"}</button>
     </div>`);
+  const mb=document.getElementById('mbox');if(mb)mb.classList.add('m-wide');
 }
 async function deleteOrder(id){if(!confirm(LANG==="zh"?"删除此订单记录？":"Delete this order?"))return;await orderEditFlush();ORDERS=ORDERS.filter(o=>o.id!==id);await saveOrders();openOrdersPanel();}
 /* 确认订单(仅区域副经理及以上) → 生成 Invoice 编号 */
