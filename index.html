@@ -601,7 +601,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0912v";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0912w";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -1479,20 +1479,47 @@ function apIsPaid(sup){const m=apPaidMap()[sup];return !!(m&&m.paid);}
 function apCanWrite(){return canW('ap');}
 function apCanUnpay(){return ['owner','area'].includes(curRole)&&!isAgg();}
 function apItems(o){return [...(o.lines||[]).map(l=>({name:(l.d||'').replace(/\n/g,' / '),q:l.q,price:l.price})),...(o.uniform||[]).map(u=>({name:(LANG==="zh"?'制服 Size ':'Uniform Size ')+u.size,q:u.q,price:u.price}))];}
-async function apTogglePaid(sup){
-  const paid=apIsPaid(sup);const who=curUser?curUser.name:ROLES[curRole].name;
-  if(paid){ if(!apCanUnpay()){alert(LANG==="zh"?"已确认『已付款』后，只有区域副经理及以上才能改回。":"Only Area Manager & above can revert.");return;}
-    if(!confirm(LANG==="zh"?("改回『未付款』？— "+sup):"Mark as UNPAID?"))return;
-    apPaidMap()[sup]={paid:false,by:who,at:Date.now()};
-  }else{ if(!apCanWrite()){alert(LANG==="zh"?"无权限。":"No permission.");return;}
-    if(!confirm(LANG==="zh"?("确认已付款？确认后店长不能改回（需区域副经理及以上）。— "+sup):"Confirm PAID?"))return;
-    apPaidMap()[sup]={paid:true,by:who,at:Date.now()};
-  }
-  await save();try{if(typeof auditLog==='function')auditLog(LANG==="zh"?"应付状态":"AP paid",sup+" · "+(apIsPaid(sup)?"已付款":"未付款")+" · "+who,"","");}catch(e){}
+function apSupReconciled(sup){const ords=apOrders().filter(o=>apSupOf(o)===sup);return ords.length>0&&ords.every(o=>o.reconciled);}
+async function apUnpay(sup){
+  if(!apCanUnpay()){alert(LANG==="zh"?"已确认『已付款』后，只有区域副经理及以上才能改回。":"Only Area Manager & above can revert.");return;}
+  if(!confirm(LANG==="zh"?("改回『未付款』？— "+sup):"Mark as UNPAID?"))return;
+  const who=curUser?curUser.name:ROLES[curRole].name;apPaidMap()[sup]={paid:false,by:who,at:Date.now()};
+  await save();try{if(typeof auditLog==='function')auditLog(LANG==="zh"?"应付状态":"AP",sup+" · 未付款 · "+who,"","");}catch(e){}render();
+}
+let _pmReceipt=null;
+function openPayForm(sup){
+  if(!apCanWrite()){alert(LANG==="zh"?"无权限。":"No permission.");return;}
+  if(!apSupReconciled(sup)){alert(LANG==="zh"?"请先把此供应商的所有订单逐项核对并按『订单正确』，才能付款。":"Reconcile & confirm all orders first.");return;}
+  _pmReceipt=null;const zh=LANG==="zh";
+  openForm(`<h3>💳 ${oEsc(sup)} · ${zh?"付款":"Payment"} <span class="x" onclick="closeM()">×</span></h3>
+    <div class="fr"><label>${zh?"付款方式 Method":"Method"}</label>
+      <select id="pm_method" onchange="pmToggle()"><option value="transfer">${zh?"转账 / 信用卡 Bank/Card":"Bank/Card"}</option><option value="cash">${zh?"现金 Cash":"Cash"}</option></select></div>
+    <div id="pm_transfer">
+      <div class="fr"><label>${zh?"上传转账收据图片（给会计核对）":"Upload receipt image"}</label><input type="file" accept="image/*" onchange="pmFile(this)"></div>
+      <div id="pm_preview" class="mini" style="margin-bottom:8px;"></div>
+    </div>
+    <div id="pm_cash" style="display:none;">
+      <div class="fr"><label>${zh?"现金金额 RM":"Cash amount RM"}</label><input id="pm_amt" type="number" step="0.01" inputmode="decimal" placeholder="0.00"></div>
+    </div>
+    <button class="btn block brand" onclick="doPayConfirm('${gEsc(sup)}')">✅ ${zh?"完成付款":"Confirm Payment"}</button>`);
+}
+function pmToggle(){const m=(document.getElementById('pm_method')||{}).value;const t=document.getElementById('pm_transfer'),c=document.getElementById('pm_cash');if(t)t.style.display=m==='cash'?'none':'';if(c)c.style.display=m==='cash'?'':'none';}
+function pmFile(inp){const f=inp.files&&inp.files[0];if(!f){_pmReceipt=null;return;}const r=new FileReader();r.onload=e=>{const img=new Image();img.onload=()=>{const mx=1000;let w=img.width,h=img.height;const s=Math.min(1,mx/Math.max(w,h));const c=document.createElement('canvas');c.width=Math.round(w*s);c.height=Math.round(h*s);c.getContext('2d').drawImage(img,0,0,c.width,c.height);_pmReceipt=c.toDataURL('image/jpeg',0.7);const pv=document.getElementById('pm_preview');if(pv)pv.innerHTML='✅ '+(LANG==="zh"?"已选择收据":"receipt selected")+'<br><img src="'+_pmReceipt+'" style="max-width:160px;border-radius:6px;margin-top:4px;">';};img.src=e.target.result;};r.readAsDataURL(f);}
+async function doPayConfirm(sup){
+  const m=(document.getElementById('pm_method')||{}).value;const who=curUser?curUser.name:ROLES[curRole].name;
+  const rec={paid:true,by:who,at:Date.now(),method:m};
+  if(m==='cash'){const amt=+((document.getElementById('pm_amt')||{}).value)||0;if(!amt){alert(LANG==="zh"?"请输入现金金额":"Enter cash amount");return;}rec.amount=amt;}
+  else{if(!_pmReceipt){alert(LANG==="zh"?"请先上传转账收据图片":"Please upload the receipt image");return;}rec.receipt=_pmReceipt;}
+  apPaidMap()[sup]=rec;_pmReceipt=null;await save();closeM();
+  try{if(typeof auditLog==='function')auditLog(LANG==="zh"?"应付付款":"AP paid",sup+" · "+(m==='cash'?('现金 RM'+rec.amount):'转账/卡')+" · "+who,"","");}catch(e){}
   render();
 }
-function apPaidBtn(sup){const paid=apIsPaid(sup);const m=apPaidMap()[sup];
-  return `<button class="btn sm" style="${paid?'background:var(--green);color:#fff;':'background:#d92d20;color:#fff;'}" onclick="event.stopPropagation();apTogglePaid('${gEsc(sup)}')">${paid?(LANG==="zh"?'✅ 已付款':'Paid'):(LANG==="zh"?'⚠️ 未付款':'Unpaid')}</button>${paid&&m&&m.by?`<div class="mini" style="text-align:right;opacity:.6;">${oEsc(m.by)}</div>`:''}`;
+function viewReceipt(sup){const m=apPaidMap()[sup];if(!m||!m.receipt)return;openForm(`<h3>🧾 ${oEsc(sup)} · ${LANG==="zh"?"付款收据":"Receipt"} <span class="x" onclick="closeM()">×</span></h3><div style="text-align:center;"><img src="${m.receipt}" style="max-width:100%;border-radius:8px;"></div>`);}
+function apPaidBtn(sup){const paid=apIsPaid(sup);const m=apPaidMap()[sup];const zh=LANG==="zh";
+  if(!paid)return `<button class="btn sm" style="background:#d92d20;color:#fff;" onclick="event.stopPropagation();openPayForm('${gEsc(sup)}')">${zh?'⚠️ 未付款':'Unpaid'}</button>`;
+  const info=m?((m.method==='cash')?(zh?('现金 RM'+num(m.amount||0,2)):('Cash RM'+num(m.amount||0,2))):(zh?'转账/卡':'Bank/Card')):'';
+  return `<div style="text-align:right;"><button class="btn sm" style="background:var(--green);color:#fff;" onclick="event.stopPropagation();apUnpay('${gEsc(sup)}')">${zh?'✅ 已付款':'Paid'}</button>`+
+    `<div class="mini" style="opacity:.7;margin-top:2px;">${oEsc(info)}${m&&m.by?(' · '+oEsc(m.by)):''}${m&&m.receipt?` · <a href="#" onclick="event.preventDefault();event.stopPropagation();viewReceipt('${gEsc(sup)}')">${zh?'查看收据':'receipt'}</a>`:''}</div></div>`;
 }
 async function setApRec(id,i,v){const o=orderById(id);if(!o)return;o.reconcile=o.reconcile||{};o.reconcile[i]=(o.reconcile[i]===v?'':v);await saveOrders();render();}
 async function apConfirmCorrect(id){const o=orderById(id);if(!o)return;if(!confirm(LANG==="zh"?"确认此单已和实体 Invoice 核对无误？":"Confirm this order is correct?"))return;o.reconciled=true;o.reconciledBy=curUser?curUser.name:ROLES[curRole].name;o.reconciledAt=Date.now();await saveOrders();render();}
@@ -1539,9 +1566,10 @@ function pgAp(){
           <span class="ib" style="${rec==='x'?'background:#fee2e2;border-color:#dc2626;':''}" onclick="setApRec('${o.id}',${i},'x')">✗</span>
         </td></tr>`;}).join('');
     const badCnt=items.filter((it,i)=>(o.reconcile||{})[i]==='x').length;
+    const allMarked=items.length>0&&items.every((it,i)=>(o.reconcile||{})[i]);
     const foot=o.reconciled
       ? `<div class="pill p-g">${zh?"✅ 订单正确":"Correct"}${o.reconciledBy?(' · '+oEsc(o.reconciledBy)):''}</div>${['owner','area'].includes(curRole)?`<button class="btn ghost sm" onclick="apReReconcile('${o.id}')">${zh?"重新核对":"Re-open"}</button>`:''}`
-      : `${w?`<button class="btn brand sm" onclick="apConfirmCorrect('${o.id}')">✅ ${zh?"订单正确":"Order Correct"}</button>`:''}${badCnt?`<span class="mini neg">${zh?("有 "+badCnt+" 项打叉"):badCnt+" flagged"}</span>`:''}`;
+      : `${badCnt?`<span class="mini neg">${zh?("有 "+badCnt+" 项打叉"):badCnt+" flagged"}</span>`:''}${w?(allMarked?`<button class="btn brand sm" onclick="apConfirmCorrect('${o.id}')">✅ ${zh?"订单正确":"Order Correct"}</button>`:`<button class="btn sm" disabled style="opacity:.5;cursor:not-allowed;">✅ ${zh?"订单正确":"Order Correct"}</button><span class="mini" style="opacity:.7;">${zh?"请先把每一项都核对(✔/✗)":"Mark every item first"}</span>`):''}`;
     return `<div class="card" style="padding:12px;margin-bottom:10px;">
       <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center;">
         <div style="font-weight:800;">🧾 ${oEsc(o.invoiceNo||'-')}</div>
@@ -2464,12 +2492,13 @@ function openInvoice(id){
   const zh=LANG==="zh";
   openForm(`<div class="noprint" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap;">
       <h3 style="margin:0;">🧾 Invoice ${oEsc(o.invoiceNo||'')} <span class="x" onclick="closeM()">×</span></h3>
-      <button class="btn brand sm" onclick="printInvoice()">🖨️ ${zh?'打印 / 存成 PDF':'Print / Save PDF'}</button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;"><button class="btn brand sm" onclick="printInvoice()">🖨️ ${zh?'打印 / 存成 PDF':'Print / Save PDF'}</button><button class="btn gold sm" onclick="invoiceDone('${o.id}')">✅ ${zh?'确定':'Done'}</button></div>
     </div>
     <div style="max-height:78vh;overflow:auto;">${invoiceHTML(o)}</div>
-    <div class="noprint mini" style="margin-top:8px;opacity:.7;">${zh?'手机：点打印后，在打印机选「储存为 PDF / Save as PDF」即可下载到手机。':'Choose Save as PDF to download.'}</div>`);
+    <div class="noprint mini" style="margin-top:8px;opacity:.7;">${zh?'手机：点打印后，在打印机选「储存为 PDF / Save as PDF」即可下载到手机。按『确定』表示已创建，可在『订单发票』查看。':'Choose Save as PDF to download.'}</div>`);
   const mb=document.getElementById('mbox');if(mb)mb.classList.add('m-wide');
 }
+function invoiceDone(id){const o=orderById(id);if(o){o.invoiceCreated=true;saveOrders();}closeM();alert(LANG==="zh"?("✅ Invoice 已创建，可在『采购进销 → 订单发票』查看。"):"✅ Invoice saved. See Order Invoices.");}
 function printInvoice(){document.body.classList.add('inv-print');window.print();setTimeout(()=>document.body.classList.remove('inv-print'),500);}
 if(typeof window!=='undefined')window.addEventListener('afterprint',()=>document.body.classList.remove('inv-print'));
 
