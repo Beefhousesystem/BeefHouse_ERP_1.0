@@ -601,7 +601,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0912u";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0912v";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -1177,7 +1177,7 @@ function auditLog(act,detail,oldv,newv){
 function can(p){return ROLES[curRole].can.includes(p);}
 // 作业中心(proc)只要拥有任一子作业权限即可进入；子页与页面级访问统一由 pageAllowed 判定
 function hasAnyOp(){return ['proc','transfer','waste','ent','stock'].some(p=>can(p));}
-function pageAllowed(p){if(p==='proc')return hasAnyOp();if(p==='monthly')return can('report');if(typeof PROC_SUB!=='undefined'&&PROC_SUB[p])return can(PROC_SUB[p]);return can(p);}
+function pageAllowed(p){if(p==='proc')return hasAnyOp();if(p==='monthly')return can('report');if(p==='orderinv')return ['owner','area','manager','headchef'].includes(curRole);if(typeof PROC_SUB!=='undefined'&&PROC_SUB[p])return can(PROC_SUB[p]);return can(p);}
 function firstAllowedPage(){const order=['dash','attend','leave','payroll','hr','schedule','sales','inv','proc','ck','stock','opex','ap','bom','report','settings'];for(const p of order)if(pageAllowed(p))return p;return 'dash';}
 function canW(p){return can(p)&&!isAgg();} // 汇总视图为只读
 function renderTop(){
@@ -1211,13 +1211,13 @@ function renderTop(){
 }
 // 侧边栏菜单分组（ERP 结构，方便日后扩充）
 const MENU=[
-  ["营运 Operations",[["dash","💰","dash"],["sales","🧾","sales"],["proc","🔄","proc"],["ck","🏭","ck"]]],
+  ["营运 Operations",[["dash","💰","dash"],["sales","🧾","sales"],["proc","🔄","proc"],["orderinv","🧾","orderinv"],["ck","🏭","ck"]]],
   ["库存 Inventory",[["inv","📦","inv"],["bom","🍲","bom"],["stock","📋","stock"]]],
   ["财务 Finance",[["ap","💳","ap"],["opex","💵","opex"],["monthly","📅","monthly"],["report","📈","report"]]],
   ["人事 HR",[["hr","👤","hr"],["attend","🕐","attend"],["schedule","📅","schedule"],["leave","🌴","leave"],["payroll","💴","payroll"]]],
   ["系统 System",[["settings","⚙️","settings"]]],
 ];
-const MENU_LABELS={sales:{zh:"销售 (POS)",en:"Sales (POS)"},ck:{zh:"中央厨房",en:"Central Kitchen"},stock:{zh:"盘点",en:"Stock Take"},hr:{zh:"员工档案",en:"Staff Profiles"},attend:{zh:"打卡考勤",en:"Attendance"},schedule:{zh:"排班",en:"Schedule"},leave:{zh:"请假",en:"Leave"},monthly:{zh:"月度核算",en:"Monthly Cost"},bom:{zh:"配方成本",en:"Recipe Cost"}};
+const MENU_LABELS={sales:{zh:"销售 (POS)",en:"Sales (POS)"},orderinv:{zh:"订单发票",en:"Order Invoices"},ck:{zh:"中央厨房",en:"Central Kitchen"},stock:{zh:"盘点",en:"Stock Take"},hr:{zh:"员工档案",en:"Staff Profiles"},attend:{zh:"打卡考勤",en:"Attendance"},schedule:{zh:"排班",en:"Schedule"},leave:{zh:"请假",en:"Leave"},monthly:{zh:"月度核算",en:"Monthly Cost"},bom:{zh:"配方成本",en:"Recipe Cost"}};
 function mlabel(p){if(MENU_LABELS[p])return MENU_LABELS[p][LANG];return t(p);}
 function renderSidebar(){
   const html=MENU.map(([grp,items])=>{
@@ -1234,7 +1234,7 @@ async function switchOutlet(){curOutlet=document.getElementById('outletSel').val
   render();}
 function switchRole(){curRole=document.getElementById('roleSel').value;if(!pageAllowed(curPage))curPage=firstAllowedPage();render();}
 function toggleLang(){LANG=LANG==="zh"?"en":"zh";render();}
-function nav(p){curPage=p;if(!['purchase','grn','monthend'].includes(p))selSupplier=null;if(p!=='inv')invSupplier=null;if(p!=='bom')dcSel=null;if(p!=='ap')apSel=null;const sb=document.getElementById('sidebar');if(sb)sb.classList.remove('open');const bd=document.getElementById('backdrop');if(bd)bd.classList.remove('show');render();window.scrollTo(0,0);}
+function nav(p){curPage=p;if(!['purchase','grn','monthend'].includes(p))selSupplier=null;if(p!=='inv')invSupplier=null;if(p!=='bom')dcSel=null;if(p!=='ap')apSel=null;if(p!=='orderinv'){oiSel=null;oiMonth=null;}const sb=document.getElementById('sidebar');if(sb)sb.classList.remove('open');const bd=document.getElementById('backdrop');if(bd)bd.classList.remove('show');render();window.scrollTo(0,0);}
 
 
 /* ================= M1 利润大盘 ================= */
@@ -1506,19 +1506,24 @@ function pgAp(){
   const sups=Object.keys(groups).sort();
   // —— 供应商列表 ——
   if(!apSel){
-    let owed=0,unpaidN=0;sups.forEach(s=>{if(!apIsPaid(s)){unpaidN++;groups[s].forEach(o=>owed+=orderTotals(o).ta);}});
-    const cards=sups.map(s=>{const ords=groups[s];const tot=ords.reduce((a,o)=>a+orderTotals(o).ta,0);const paid=apIsPaid(s);
-      return `<div class="card" style="padding:13px;margin-bottom:9px;cursor:pointer;" onclick="setApSel('${s.replace(/'/g,"\\'")}')">
+    let owed=0,unpaidN=0,paidTot=0,paidN=0;sups.forEach(s=>{const tot=groups[s].reduce((a,o)=>a+orderTotals(o).ta,0);if(apIsPaid(s)){paidN++;paidTot+=tot;}else{unpaidN++;owed+=tot;}});
+    const cards=sups.map(s=>{const ords=groups[s];const tot=ords.reduce((a,o)=>a+orderTotals(o).ta,0);
+      return `<div class="card" style="padding:13px;margin-bottom:9px;">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
           <div><div style="font-weight:800;font-size:15px;">🏢 ${oEsc(s)}</div>
           <div class="mini">${ords.length} ${zh?"张 Invoice":"invoices"} · ${money(tot)}</div></div>
-          <div style="text-align:right;">${apPaidBtn(s)}</div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+            <button class="btn ghost sm" onclick="setApSel('${s.replace(/'/g,"\\'")}')">📋 ${zh?"订单状态":"Status"}</button>
+            ${apPaidBtn(s)}
+          </div>
         </div></div>`;}).join('')||`<div class="empty">${zh?"暂无已确认的订单。请先在『采购进销 → 订货单』下单并确认。":"No confirmed invoices yet."}</div>`;
     return `<div class="fb"><h2 class="h" style="margin:0;">💳 ${zh?"应付账款":"Payables"} <span class="tag">${nm(outletObj())}</span></h2><button class="btn ghost sm" onclick="nav('proc')">← ${zh?"返回":"Back"}</button></div>
-      <div class="hint">${zh?"点供应商 → 看该店的 Invoice（来自订货单确认后自动生成）→ 逐项核对(✔/✗)→ 按『订单正确』→ 付款后按『未付款』改为已付款。":"Tap a supplier to reconcile invoices & mark paid."}</div>
+      <div class="hint">${zh?"点『订单状态』→ 看该店的 Invoice → 逐项核对(✔/✗)→ 按『订单正确』；付款后按『未付款』改为已付款。":"Tap Status to reconcile; mark paid."}</div>
       <div class="grid g2" style="margin-bottom:10px;">
         <div class="kpi"><div class="k">${zh?"未付供应商":"Unpaid vendors"}</div><div class="v sm ${unpaidN?'neg':''}">${unpaidN}</div></div>
         <div class="kpi"><div class="k">${zh?"未付总额":"Total unpaid"}</div><div class="v sm ${owed>0?'neg':''}">${money(owed)}</div></div>
+        <div class="kpi"><div class="k">${zh?"已付供应商":"Paid vendors"}</div><div class="v sm pos">${paidN}</div></div>
+        <div class="kpi"><div class="k">${zh?"已付总额":"Total paid"}</div><div class="v sm pos">${money(paidTot)}</div></div>
       </div>
       ${cards}`;
   }
@@ -1545,6 +1550,65 @@ function pgAp(){
       <div style="display:flex;justify-content:flex-end;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;">${foot}</div>
     </div>`;}).join('')||`<div class="empty">${zh?"此供应商暂无已确认 Invoice。":"No invoices."}</div>`;
   return head+`<div class="hint">${zh?"把这里的 Invoice 和你手上的实体单逐项核对：对的按✔、不对/缺货按✗，全部核对后按『订单正确』。付款后在右上角把『未付款』改成『已付款』。":"Reconcile each item, then Order Correct; mark paid at top-right."}</div>${blocks}`;
+}
+
+/* ================= 订单发票（订货单确认后的 Invoice 库：供应商 → 月份 → Invoice）================= */
+let oiSel=null, oiMonth=null;
+function setOiSel(s){oiSel=s;oiMonth=null;render();window.scrollTo(0,0);}
+function setOiMonth(m){oiMonth=m;render();window.scrollTo(0,0);}
+function backOi(){if(oiMonth)oiMonth=null;else oiSel=null;render();window.scrollTo(0,0);}
+function oiInvoices(){return (typeof ORDERS!=='undefined'?ORDERS:[]).filter(o=>o&&o.status==='confirmed'&&o.invoiceNo&&o.outlet===curOutlet);}
+function oiMonthOf(o){return new Date(o.confirmedAt||o.ts).toLocaleDateString('en-CA').slice(0,7);}
+function oiCanDel(){return ['owner','area'].includes(curRole)&&!isAgg();}
+async function delInvoice(id){if(!oiCanDel()){alert(LANG==="zh"?"只有区域副经理及以上可删除 Invoice。":"Only Area Manager & above can delete.");return;}if(!confirm(LANG==="zh"?"删除此 Invoice？此操作无法复原。":"Delete this invoice?"))return;await loadOrders();ORDERS=ORDERS.filter(o=>o.id!==id);await saveOrders();try{if(typeof auditLog==='function')auditLog(LANG==="zh"?"删除Invoice":"Delete invoice",id,"","");}catch(e){}render();}
+function pgOrderInv(){
+  const zh=LANG==="zh";
+  if(isAgg())return `<div class="fb"><h2 class="h" style="margin:0;">🧾 ${zh?"订单发票":"Order Invoices"}</h2></div><div class="hint">${zh?"请在右上角切换到某一分店查看该店的 Invoice。":"Switch to a branch."}</div>`;
+  const all=oiInvoices();
+  const groups={};all.forEach(o=>{const s=apSupOf(o);(groups[s]=groups[s]||[]).push(o);});
+  const sups=Object.keys(groups).sort();
+  // Level 1: 供应商
+  if(!oiSel){
+    const cards=sups.map(s=>{const ords=groups[s];const months=[...new Set(ords.map(oiMonthOf))];
+      return `<div class="card" style="padding:13px;margin-bottom:9px;cursor:pointer;" onclick="setOiSel('${s.replace(/'/g,"\\'")}')">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div><div style="font-weight:800;font-size:15px;">🏢 ${oEsc(s)}</div>
+          <div class="mini">${ords.length} ${zh?"张 Invoice":"invoices"} · ${months.length} ${zh?"个月份":"months"}</div></div>
+          <span class="mini">›</span>
+        </div></div>`;}).join('')||`<div class="empty">${zh?"暂无 Invoice。请先在『采购进销 → 订货单』下单并确认生成 Invoice。":"No invoices yet."}</div>`;
+    return `<div class="fb"><h2 class="h" style="margin:0;">🧾 ${zh?"订单发票":"Order Invoices"} <span class="tag">${nm(outletObj())}</span></h2></div>
+      <div class="hint">${zh?"订货单确认后生成的 Invoice 都在这里。点供应商 → 选月份 → 查看/打印。区域副经理及以上可删除。":"Invoices from confirmed order sheets. Supplier → month → view."}</div>
+      ${cards}`;
+  }
+  const ords=(groups[oiSel]||[]);
+  // Level 2: 月份
+  if(!oiMonth){
+    const mMap={};ords.forEach(o=>{const m=oiMonthOf(o);(mMap[m]=mMap[m]||[]).push(o);});
+    const months=Object.keys(mMap).sort().reverse();
+    const cards=months.map(m=>{const list=mMap[m];const tot=list.reduce((a,o)=>a+orderTotals(o).ta,0);
+      return `<div class="card" style="padding:13px;margin-bottom:9px;cursor:pointer;" onclick="setOiMonth('${m}')">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div><div style="font-weight:800;font-size:15px;">📅 ${monthLabel2(m)}</div>
+          <div class="mini">${list.length} ${zh?"张 Invoice":"invoices"} · ${money(tot)}</div></div>
+          <span class="mini">›</span>
+        </div></div>`;}).join('')||`<div class="empty">—</div>`;
+    return `<div class="fb"><h2 class="h" style="margin:0;">🧾 ${oEsc(oiSel)}</h2><button class="btn ghost sm" onclick="backOi()">← ${zh?"供应商列表":"Suppliers"}</button></div>
+      <div class="hint">${zh?"选月份查看该月 Invoice。":"Pick a month."}</div>${cards}`;
+  }
+  // Level 3: Invoice 列表
+  const list=ords.filter(o=>oiMonthOf(o)===oiMonth).sort((a,b)=>(b.confirmedAt||b.ts)-(a.confirmedAt||a.ts));
+  const rows=list.map(o=>{const t=orderTotals(o);const dt=new Date(o.confirmedAt||o.ts).toLocaleDateString('en-GB');
+    return `<div class="card" style="padding:12px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;">
+        <div><div style="font-weight:800;">🧾 ${oEsc(o.invoiceNo||'-')}</div>
+        <div class="mini">${dt} · ${zh?"下单":"by"} ${oEsc(o.by&&o.by.name||'')} · ${(o.lines||[]).length+(o.uniform||[]).length} ${zh?"项":"items"} · ${money(t.ta)}</div></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn gold sm" onclick="openInvoice('${o.id}')">🧾 ${zh?"查看":"View"}</button>
+          ${oiCanDel()?`<button class="btn ghost sm" onclick="delInvoice('${o.id}')">🗑️ ${zh?"删除":"Delete"}</button>`:''}
+        </div>
+      </div></div>`;}).join('')||`<div class="empty">—</div>`;
+  return `<div class="fb"><h2 class="h" style="margin:0;">🧾 ${oEsc(oiSel)} · ${monthLabel2(oiMonth)}</h2><button class="btn ghost sm" onclick="backOi()">← ${zh?"月份":"Months"}</button></div>
+    <div class="hint">${zh?"点『查看』看完整 Invoice，可打印/存 PDF。":"View to open & print."}${oiCanDel()?'':(zh?' 你只能查看，不能删除。':' View only.')}</div>${rows}`;
 }
 
 /* ================= M7 配方成本（可编辑菜品成本表 + 单独算）================= */
@@ -3435,7 +3499,7 @@ function pgMonthEnd(){return pgLedger('monthend');}
 
 /* 页面路由补充（ap/opex 不在底部tab，用函数导航） */
 const _pages={dash:pgDash,sales:pgSales,inv:pgInv,proc:pgProc,bom:pgBom,report:pgReport,settings:pgSettings,ap:pgAp,opex:pgOpex,payroll:pgPayroll,hr:pgHR,attend:pgAttend,schedule:pgSchedule,leave:pgLeave,ck:pgCK,stock:pgStock,
-  purchase:pgPurchase,grn:pgGRN,transfer:pgTransfer,waste2:pgWaste2,offer:pgOffer,monthend:pgMonthEnd,monthly:pgMonthly,ordersheet:pgOrderSheet};
+  purchase:pgPurchase,grn:pgGRN,transfer:pgTransfer,waste2:pgWaste2,offer:pgOffer,monthend:pgMonthEnd,monthly:pgMonthly,ordersheet:pgOrderSheet,orderinv:pgOrderInv};
 function render(){
   if(!pageAllowed(curPage)){curPage=firstAllowedPage();selSupplier=null;} // 权限收紧后自动落到可访问页
   renderTop();renderSidebar();
