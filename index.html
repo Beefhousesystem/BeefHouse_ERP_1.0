@@ -601,7 +601,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0912y";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0912z";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -1500,6 +1500,7 @@ function openPayForm(sup){
       <div class="fr"><label>${zh?"上传转账收据图片（给会计核对）":"Upload receipt image"}</label><input type="file" accept="image/jpeg,image/png,image/*" onchange="pmFile(this)"></div>
       <div class="mini" style="opacity:.7;margin:-4px 0 8px;">📎 ${zh?"请上传 JPG / PNG 图片，5MB 以下。会按供应商/月份存档到云端。":"JPG/PNG, ≤5MB. Stored by supplier/month."}</div>
       <div id="pm_preview" class="mini" style="margin-bottom:8px;"></div>
+      <div class="fr"><label>${zh?"实付金额 RM（照收据打一次，用来比对）":"Amount paid RM"}</label><input id="pm_tamt" type="number" step="0.01" inputmode="decimal" placeholder="0.00"></div>
     </div>
     <div id="pm_cash" style="display:none;">
       <div class="fr"><label>${zh?"现金金额 RM":"Cash amount RM"}</label><input id="pm_amt" type="number" step="0.01" inputmode="decimal" placeholder="0.00"></div>
@@ -1519,6 +1520,7 @@ async function doPayConfirm(sup){
   if(m==='cash'){const amt=+((document.getElementById('pm_amt')||{}).value)||0;if(!amt){alert(LANG==="zh"?"请输入现金金额":"Enter cash amount");return;}rec.amount=amt;}
   else{
     if(!_pmReceipt){alert(LANG==="zh"?"请先上传转账收据图片":"Please upload the receipt image");return;}
+    const tamt=+((document.getElementById('pm_tamt')||{}).value)||0;if(!tamt){alert(LANG==="zh"?"请照收据输入『实付金额』(用来比对少付/多付)":"Enter amount paid");return;}rec.amount=tamt;
     let uploaded=null;
     if(AUTH()){try{
       const blob=_pmBlob||await (await fetch(_pmReceipt)).blob();
@@ -1542,7 +1544,7 @@ function apPaidBtn(sup){const paid=apIsPaid(sup);const m=apPaidMap()[sup];const 
   if(!paid)return `<button class="btn sm" style="background:#d92d20;color:#fff;" onclick="event.stopPropagation();openPayForm('${gEsc(sup)}')">${zh?'⚠️ 未付款':'Unpaid'}</button>`;
   const info=m?((m.method==='cash')?(zh?('现金 RM'+num(m.amount||0,2)):('Cash RM'+num(m.amount||0,2))):(zh?'转账/卡':'Bank/Card')):'';
   const sh=apShort(sup);
-  const shTag=sh>0.005?`<div class="mini" style="margin-top:3px;color:#fff;background:#d92d20;font-weight:800;border-radius:6px;padding:2px 6px;display:inline-block;">⚠️ ${zh?'少付':'Short'} RM${num(sh,2)}</div>`:(sh<-0.005?`<div class="mini" style="margin-top:3px;color:#b45309;">${zh?'多付':'Over'} RM${num(-sh,2)}</div>`:'');
+  const shTag=sh>0.005?`<div class="mini" style="margin-top:3px;color:#fff;background:#d92d20;font-weight:800;border-radius:6px;padding:2px 6px;display:inline-block;">⚠️ ${zh?'少付':'Short'} RM${num(sh,2)}</div>`:(sh<-0.005?`<div class="mini" style="margin-top:3px;color:#fff;background:#0891b2;font-weight:800;border-radius:6px;padding:2px 6px;display:inline-block;">💧 ${zh?'多付':'Over'} RM${num(-sh,2)}</div>`:'');
   return `<div style="text-align:right;"><button class="btn sm" style="background:${sh>0.005?'#d92d20':'var(--green)'};color:#fff;" onclick="event.stopPropagation();apUnpay('${gEsc(sup)}')">${sh>0.005?(zh?'⚠️ 少付':'Short'):(zh?'✅ 已付款':'Paid')}</button>`+
     `<div class="mini" style="opacity:.7;margin-top:2px;">${oEsc(info)}${m&&m.by?(' · '+oEsc(m.by)):''}${m&&(m.receipt||m.receiptPath)?` · <a href="#" onclick="event.preventDefault();event.stopPropagation();viewReceipt('${gEsc(sup)}')">${zh?'查看收据':'receipt'}</a>`:''}</div>${shTag}</div>`;
 }
@@ -1551,8 +1553,8 @@ async function apConfirmCorrect(id){const o=orderById(id);if(!o)return;if(!confi
 async function apReReconcile(id){const o=orderById(id);if(!o)return;if(!['owner','area'].includes(curRole)){alert(LANG==="zh"?"已核对后仅区域副经理及以上可重开。":"Only Area+ can re-open.");return;}if(!confirm(LANG==="zh"?"重新核对？会清除所有 ✔/✗，需要重新逐项核对。":"Re-open? All ✔/✗ will be cleared."))return;o.reconciled=false;o.reconcile={};await saveOrders();render();}
 /* 付款金额比对：现金少付/多付提示 */
 function apSupTotal(sup){return apOrders().filter(o=>apSupOf(o)===sup).reduce((a,o)=>a+orderTotals(o).ta,0);}
-function apPaidAmt(sup){const m=apPaidMap()[sup];if(!m||!m.paid)return 0;return m.method==='cash'?(+m.amount||0):apSupTotal(sup);}
-function apShort(sup){const m=apPaidMap()[sup];if(!m||!m.paid||m.method!=='cash')return 0;return +(apSupTotal(sup)-(+m.amount||0)).toFixed(2);}
+function apPaidAmt(sup){const m=apPaidMap()[sup];if(!m||!m.paid)return 0;return (m.amount!=null&&m.amount!=='')?(+m.amount||0):apSupTotal(sup);}
+function apShort(sup){const m=apPaidMap()[sup];if(!m||!m.paid||m.amount==null||m.amount==='')return 0;return +(apSupTotal(sup)-(+m.amount||0)).toFixed(2);}
 function pgAp(){
   const zh=LANG==="zh";const w=apCanWrite();
   if(isAgg())return `<div class="fb"><h2 class="h" style="margin:0;">💳 ${zh?"应付账款":"Payables"}</h2></div><div class="hint">${zh?"请在右上角切换到某一分店查看该店的应付账款。":"Switch to a branch."}</div>`;
@@ -1564,11 +1566,11 @@ function pgAp(){
   if(!apSel){
     let owed=0,unpaidN=0,paidTot=0,paidN=0,shortN=0,shortTot=0;sups.forEach(s=>{const tot=groups[s].reduce((a,o)=>a+orderTotals(o).ta,0);if(apIsPaid(s)){paidN++;paidTot+=apPaidAmt(s);const sh=apShort(s);if(sh>0.005){shortN++;shortTot+=sh;}}else{unpaidN++;owed+=tot;}});
     const cards=sups.map(s=>{const ords=groups[s];const tot=ords.reduce((a,o)=>a+orderTotals(o).ta,0);const sh=apShort(s);const invNos=ords.map(o=>o.invoiceNo).filter(Boolean).join('、');
-      return `<div class="card" style="padding:13px;margin-bottom:9px;${sh>0.005?'border:2px solid #d92d20;background:#fef2f2;':''}">
+      return `<div class="card" style="padding:13px;margin-bottom:9px;${sh>0.005?'border:2px solid #d92d20;background:#fef2f2;':(sh<-0.005?'border:2px solid #0891b2;background:#ecfeff;':'')}">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
           <div><div style="font-weight:800;font-size:15px;">🏢 ${oEsc(s)}</div>
           <div class="mini">${ords.length} ${zh?"张 Invoice":"invoices"} · ${zh?"应付":"Due"} ${money(tot)}</div>
-          ${sh>0.005?`<div class="mini" style="color:#d92d20;font-weight:800;">⚠️ ${zh?"少付":"Short"} RM${num(sh,2)}（${zh?"实付":"paid"} ${money(apPaidAmt(s))}）· ${oEsc(invNos)}</div>`:''}</div>
+          ${sh>0.005?`<div class="mini" style="color:#d92d20;font-weight:800;">⚠️ ${zh?"少付":"Short"} RM${num(sh,2)}（${zh?"实付":"paid"} ${money(apPaidAmt(s))}）· ${oEsc(invNos)}</div>`:(sh<-0.005?`<div class="mini" style="color:#0891b2;font-weight:800;">💧 ${zh?"多付":"Over"} RM${num(-sh,2)}（${zh?"实付":"paid"} ${money(apPaidAmt(s))}）· ${oEsc(invNos)}</div>`:'')}</div>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
             <button class="btn ghost sm" onclick="setApSel('${s.replace(/'/g,"\\'")}')">📋 ${zh?"订单状态":"Status"}</button>
             ${apPaidBtn(s)}
@@ -1588,7 +1590,7 @@ function pgAp(){
   // —— 单一供应商：Invoice 对账 ——
   const ords=(groups[apSel]||[]).slice().sort((a,b)=>(b.confirmedAt||b.ts)-(a.confirmedAt||a.ts));
   const _sh=apShort(apSel);
-  const shBanner=_sh>0.005?`<div class="al al-r" style="margin-bottom:10px;"><div class="t">⚠️ ${zh?"现金少付 RM"+num(_sh,2):"Short RM"+num(_sh,2)}</div>${zh?("应付 "+money(apSupTotal(apSel))+"，实付 "+money(apPaidAmt(apSel))+"，还差 RM"+num(_sh,2)+"。"):("Due "+money(apSupTotal(apSel))+", paid "+money(apPaidAmt(apSel)))}</div>`:'';
+  const shBanner=_sh>0.005?`<div class="al al-r" style="margin-bottom:10px;"><div class="t">⚠️ ${zh?"少付 RM"+num(_sh,2):"Short RM"+num(_sh,2)}</div>${zh?("应付 "+money(apSupTotal(apSel))+"，实付 "+money(apPaidAmt(apSel))+"，还差 RM"+num(_sh,2)+"。"):("Due "+money(apSupTotal(apSel))+", paid "+money(apPaidAmt(apSel)))}</div>`:(_sh<-0.005?`<div class="al" style="margin-bottom:10px;background:#ecfeff;border-color:#0891b2;color:#0e7490;"><div class="t">💧 ${zh?"多付 RM"+num(-_sh,2):"Over RM"+num(-_sh,2)}</div>${zh?("应付 "+money(apSupTotal(apSel))+"，实付 "+money(apPaidAmt(apSel))+"。"):("Due "+money(apSupTotal(apSel))+", paid "+money(apPaidAmt(apSel)))}</div>`:'');
   const head=`<div class="fb"><h2 class="h" style="margin:0;">💳 ${oEsc(apSel)}</h2><div style="display:flex;gap:6px;align-items:center;">${apPaidBtn(apSel)}<button class="btn ghost sm" onclick="backAp()">← ${zh?"供应商列表":"Suppliers"}</button></div></div>${shBanner}`;
   const blocks=ords.map(o=>{
     const items=apItems(o);const t=orderTotals(o);const dt=new Date(o.confirmedAt||o.ts).toLocaleDateString('en-GB');
