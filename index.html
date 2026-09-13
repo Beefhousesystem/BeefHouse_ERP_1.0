@@ -601,7 +601,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0912w";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0912x";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -954,6 +954,8 @@ const CLOUD_TABLE = "erp_store";
    需先在 Supabase 部署 send-order-push 函数并设好密钥（见 PUSH_SETUP.md）。*/
 const VAPID_PUBLIC = "BPHQNkdOiFVhx7PjHxw5pIMWZkjOaqzQNzGbh3M67Kf7HLjLI3FpH15kfzsQiPDrQ64lnVML8HTaa3_IMybkNEY";
 const PUSH_FN_URL = SUPABASE_URL ? (SUPABASE_URL + "/functions/v1/send-order-push") : "";
+/* 付款收据存储桶（需在 Supabase Storage 建一个名为 receipts 的 bucket；未建则自动退回内嵌图片）*/
+const RECEIPT_BUCKET = "receipts";
 
 let _sb=null, CLOUD=false;
 function initCloud(){
@@ -1495,7 +1497,8 @@ function openPayForm(sup){
     <div class="fr"><label>${zh?"付款方式 Method":"Method"}</label>
       <select id="pm_method" onchange="pmToggle()"><option value="transfer">${zh?"转账 / 信用卡 Bank/Card":"Bank/Card"}</option><option value="cash">${zh?"现金 Cash":"Cash"}</option></select></div>
     <div id="pm_transfer">
-      <div class="fr"><label>${zh?"上传转账收据图片（给会计核对）":"Upload receipt image"}</label><input type="file" accept="image/*" onchange="pmFile(this)"></div>
+      <div class="fr"><label>${zh?"上传转账收据图片（给会计核对）":"Upload receipt image"}</label><input type="file" accept="image/jpeg,image/png,image/*" onchange="pmFile(this)"></div>
+      <div class="mini" style="opacity:.7;margin:-4px 0 8px;">📎 ${zh?"请上传 JPG / PNG 图片，5MB 以下。会按供应商/月份存档到云端。":"JPG/PNG, ≤5MB. Stored by supplier/month."}</div>
       <div id="pm_preview" class="mini" style="margin-bottom:8px;"></div>
     </div>
     <div id="pm_cash" style="display:none;">
@@ -1504,22 +1507,42 @@ function openPayForm(sup){
     <button class="btn block brand" onclick="doPayConfirm('${gEsc(sup)}')">✅ ${zh?"完成付款":"Confirm Payment"}</button>`);
 }
 function pmToggle(){const m=(document.getElementById('pm_method')||{}).value;const t=document.getElementById('pm_transfer'),c=document.getElementById('pm_cash');if(t)t.style.display=m==='cash'?'none':'';if(c)c.style.display=m==='cash'?'':'none';}
-function pmFile(inp){const f=inp.files&&inp.files[0];if(!f){_pmReceipt=null;return;}const r=new FileReader();r.onload=e=>{const img=new Image();img.onload=()=>{const mx=1000;let w=img.width,h=img.height;const s=Math.min(1,mx/Math.max(w,h));const c=document.createElement('canvas');c.width=Math.round(w*s);c.height=Math.round(h*s);c.getContext('2d').drawImage(img,0,0,c.width,c.height);_pmReceipt=c.toDataURL('image/jpeg',0.7);const pv=document.getElementById('pm_preview');if(pv)pv.innerHTML='✅ '+(LANG==="zh"?"已选择收据":"receipt selected")+'<br><img src="'+_pmReceipt+'" style="max-width:160px;border-radius:6px;margin-top:4px;">';};img.src=e.target.result;};r.readAsDataURL(f);}
+let _pmBlob=null;
+function pmFile(inp){const f=inp.files&&inp.files[0];_pmReceipt=null;_pmBlob=null;const pv=document.getElementById('pm_preview');
+  if(!f)return;
+  if(!/^image\//.test(f.type)){if(pv)pv.innerHTML='⚠️ '+(LANG==="zh"?"请选择图片档 (JPG/PNG)":"Image only (JPG/PNG)");inp.value='';return;}
+  if(f.size>5*1024*1024){if(pv)pv.innerHTML='⚠️ '+(LANG==="zh"?"图片太大，请用 5MB 以下的":"File too large, keep under 5MB");inp.value='';return;}
+  const r=new FileReader();r.onload=e=>{const img=new Image();img.onload=()=>{const mx=1400;let w=img.width,h=img.height;const s=Math.min(1,mx/Math.max(w,h));const c=document.createElement('canvas');c.width=Math.round(w*s);c.height=Math.round(h*s);c.getContext('2d').drawImage(img,0,0,c.width,c.height);_pmReceipt=c.toDataURL('image/jpeg',0.75);try{c.toBlob(bb=>{_pmBlob=bb;},'image/jpeg',0.75);}catch(e){}if(pv)pv.innerHTML='✅ '+(LANG==="zh"?"已选择收据":"receipt selected")+'<br><img src="'+_pmReceipt+'" style="max-width:160px;border-radius:6px;margin-top:4px;">';};img.src=e.target.result;};r.readAsDataURL(f);}
 async function doPayConfirm(sup){
   const m=(document.getElementById('pm_method')||{}).value;const who=curUser?curUser.name:ROLES[curRole].name;
   const rec={paid:true,by:who,at:Date.now(),method:m};
   if(m==='cash'){const amt=+((document.getElementById('pm_amt')||{}).value)||0;if(!amt){alert(LANG==="zh"?"请输入现金金额":"Enter cash amount");return;}rec.amount=amt;}
-  else{if(!_pmReceipt){alert(LANG==="zh"?"请先上传转账收据图片":"Please upload the receipt image");return;}rec.receipt=_pmReceipt;}
-  apPaidMap()[sup]=rec;_pmReceipt=null;await save();closeM();
+  else{
+    if(!_pmReceipt){alert(LANG==="zh"?"请先上传转账收据图片":"Please upload the receipt image");return;}
+    let uploaded=null;
+    if(AUTH()){try{
+      const blob=_pmBlob||await (await fetch(_pmReceipt)).blob();
+      const month=new Date().toLocaleDateString('en-CA').slice(0,7);
+      const safe=v=>String(v||'').replace(/[^\w\-]+/g,'_').slice(0,48)||'x';
+      const path=safe(curOutlet)+'/'+safe(sup)+'/'+month+'/'+Date.now()+'.jpg';
+      const {error}=await _sb.storage.from(RECEIPT_BUCKET).upload(path,blob,{contentType:'image/jpeg',upsert:true});
+      if(!error)uploaded=path;
+    }catch(e){}}
+    if(uploaded)rec.receiptPath=uploaded; else rec.receipt=_pmReceipt; // 上传成功存路径，否则退回内嵌
+  }
+  apPaidMap()[sup]=rec;_pmReceipt=null;_pmBlob=null;await save();closeM();
   try{if(typeof auditLog==='function')auditLog(LANG==="zh"?"应付付款":"AP paid",sup+" · "+(m==='cash'?('现金 RM'+rec.amount):'转账/卡')+" · "+who,"","");}catch(e){}
   render();
 }
-function viewReceipt(sup){const m=apPaidMap()[sup];if(!m||!m.receipt)return;openForm(`<h3>🧾 ${oEsc(sup)} · ${LANG==="zh"?"付款收据":"Receipt"} <span class="x" onclick="closeM()">×</span></h3><div style="text-align:center;"><img src="${m.receipt}" style="max-width:100%;border-radius:8px;"></div>`);}
+async function viewReceipt(sup){const m=apPaidMap()[sup];if(!m)return;let url=m.receipt||'';
+  if(m.receiptPath&&AUTH()){try{const {data}=await _sb.storage.from(RECEIPT_BUCKET).createSignedUrl(m.receiptPath,3600);if(data&&data.signedUrl)url=data.signedUrl;}catch(e){}}
+  if(!url){alert(LANG==="zh"?"找不到收据":"Receipt not found");return;}
+  openForm(`<h3>🧾 ${oEsc(sup)} · ${LANG==="zh"?"付款收据":"Receipt"} <span class="x" onclick="closeM()">×</span></h3><div style="text-align:center;"><img src="${url}" style="max-width:100%;border-radius:8px;"></div>`);}
 function apPaidBtn(sup){const paid=apIsPaid(sup);const m=apPaidMap()[sup];const zh=LANG==="zh";
   if(!paid)return `<button class="btn sm" style="background:#d92d20;color:#fff;" onclick="event.stopPropagation();openPayForm('${gEsc(sup)}')">${zh?'⚠️ 未付款':'Unpaid'}</button>`;
   const info=m?((m.method==='cash')?(zh?('现金 RM'+num(m.amount||0,2)):('Cash RM'+num(m.amount||0,2))):(zh?'转账/卡':'Bank/Card')):'';
   return `<div style="text-align:right;"><button class="btn sm" style="background:var(--green);color:#fff;" onclick="event.stopPropagation();apUnpay('${gEsc(sup)}')">${zh?'✅ 已付款':'Paid'}</button>`+
-    `<div class="mini" style="opacity:.7;margin-top:2px;">${oEsc(info)}${m&&m.by?(' · '+oEsc(m.by)):''}${m&&m.receipt?` · <a href="#" onclick="event.preventDefault();event.stopPropagation();viewReceipt('${gEsc(sup)}')">${zh?'查看收据':'receipt'}</a>`:''}</div></div>`;
+    `<div class="mini" style="opacity:.7;margin-top:2px;">${oEsc(info)}${m&&m.by?(' · '+oEsc(m.by)):''}${m&&(m.receipt||m.receiptPath)?` · <a href="#" onclick="event.preventDefault();event.stopPropagation();viewReceipt('${gEsc(sup)}')">${zh?'查看收据':'receipt'}</a>`:''}</div></div>`;
 }
 async function setApRec(id,i,v){const o=orderById(id);if(!o)return;o.reconcile=o.reconcile||{};o.reconcile[i]=(o.reconcile[i]===v?'':v);await saveOrders();render();}
 async function apConfirmCorrect(id){const o=orderById(id);if(!o)return;if(!confirm(LANG==="zh"?"确认此单已和实体 Invoice 核对无误？":"Confirm this order is correct?"))return;o.reconciled=true;o.reconciledBy=curUser?curUser.name:ROLES[curRole].name;o.reconciledAt=Date.now();await saveOrders();render();}
