@@ -42,7 +42,36 @@
 3. 遇到「这个不一样」的地方，**先问业主 / 按本备忘调整**，不要照抄牛室的默认值。
 4. 之后每发现一个两店差异，**追加记录到本文件**，方便复制时逐条对照。
 
+## ⭐ 用 Beef House 更新明记 ERP（保留明记数据）——复制清单
+业主确认：**明记已有自己的 ERP（旧版），数据存在明记自己独立的 Supabase 项目**。
+目标：把牛室的**新功能/代码改动**搬过去，但**明记的数据(供应商/BOM/月末等)一律保留**。
+
+### 核心原理：代码 ≠ 数据
+- **数据**（供应商、BOM 配方、月末算货、库存…）存在**各店自己的 Supabase + 浏览器**，**不在 `index.html` 里**。
+- 所以「更新代码」**不会动到明记的数据**——前提是明记继续连**它自己的 Supabase**（下列配置不改）。
+- 这条路最安全：不需要为了共享而开放任何 Supabase 数据。
+
+### 复制时【必须保留明记自己的】（逐行核对，别照抄牛室）
+1. **Supabase 配置**（`index.html` 内）——改了会连错库/丢数据，务必用明记的：
+   - `const SUPABASE_URL = ...`（约 955 行）
+   - `const SUPABASE_ANON_KEY = ...`（约 956 行，publishable key）
+   - `VAPID_PUBLIC` / `PUSH_FN_URL` / `RECEIPT_BUCKET`（约 961-964 行，如明记有自己的推送/存储则用明记的）
+2. **名字/招牌**：`appTitle`、页头 logo（约 270、595-597 行；明记用「Meng Kee」相关，别显示牛室）。
+3. **明记自己的种子供应商**：`const SUPPLIER_CATALOG = {...}`（约 299 行）用明记的；牛室的供应商别带过去。
+   - 注：即使种子不改，明记 Supabase 里已保存的供应商也会覆盖种子；但仍建议换成明记的，避免新/空门店显示牛室供应商。
+4. **盘点 + BOM 的摆位**（见上文两店差异）：明记主用**逐品项盘点(pgStock)**，要把 `stock` 重新放回侧栏「库存」组（牛室已从菜单拿掉但代码仍在）；BOM 是明记主用，保留。
+5. `const OUTLETS = [...]`（约 294 行）：明记的门店列表，用明记的。
+
+### 复制时【一律用牛室最新的】
+- 其余所有新功能/改动：运营开销录入(opexm)、订单发票(orderinv)、应付账款对账/付款、进货单&月末盘点表格的**排序/复制/删除(cid)**、Invoice 弹窗、库存页「需要注意」折叠、月末盘点(只留当月最后一天) 等。
+- 复制完，明记那边**可继续自行修改**（它有独立的一份代码+数据）。
+
+### 换账号做同样的事——安全吗？
+- **共享代码（GitHub 仓库）**：安全。别给不信任的人 **write** 权限（能改代码=能改上线 App）；给只读即可。
+- **共享数据（Supabase）**：网页里已内嵌 publishable key（设计上可公开），**真正的保护是 Supabase RLS + App 登录 + 牛室/明记分库**。**牛室与明记必须两个独立 Supabase 项目**（已做到）。**绝不要**把 service_role 密钥写进 HTML（目前只放了 publishable key，是对的）。
+
 ## 开发/部署工作流（现有约定）
 - 单文件 ERP，无构建步骤；改 `index.html` → 用 Playwright(`/opt/pw-browsers/chromium`, file://) 无头测试 → 每次改动**bump `const BUILD`**（右上角版本角标可核对已载入最新版）。
 - 部署：`git push beefhouse bh-fix5:main`（失败按 2/4/8/16s 退避重试；remote 已迁移到 yxchong3/BeefHouse_ERP_1.0，GitHub Pages live）。
 - 提交信息用中文、清楚描述改动。
+- 复制到明记需一并带上的文件：`index.html` + `CLAUDE.md` + `order-data.js` + `sw.js` + `manifest.webmanifest` + `icon-192.png` + `icon-512.png`（以及 `supabase/` 下的推送函数与 SQL，如明记要用推送）。
