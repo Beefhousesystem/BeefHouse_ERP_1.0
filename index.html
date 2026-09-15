@@ -228,6 +228,10 @@
   .m h3{font-size:16px;color:var(--ink);margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;}
   .m h3 .x{font-size:22px;color:var(--grey);cursor:pointer;line-height:1;}
   .line-item{background:var(--soft);border-radius:8px;padding:9px;margin-bottom:7px;font-size:12px;display:flex;justify-content:space-between;align-items:center;}
+  /* 拖动排序 */
+  .draghandle{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;color:var(--grey);font-size:16px;line-height:1;padding:2px 6px;display:inline-block;}
+  .draghandle:active{cursor:grabbing;}
+  [data-sortid].sorting{opacity:.55;background:#FFF8E1 !important;box-shadow:0 4px 14px rgba(0,0,0,.18);}
   /* seg */
   .seg{display:inline-flex;background:var(--soft);border-radius:9px;padding:3px;gap:2px;flex-wrap:wrap;}
   .seg button{border:none;background:none;padding:6px 11px;font-size:12px;font-weight:700;border-radius:7px;color:var(--grey);cursor:pointer;}
@@ -612,7 +616,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0915f";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0915g";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -3251,7 +3255,7 @@ function backSupplier(){selSupplier=null;ledgerMonth='all';render();window.scrol
 function goProcSub(p){selSupplier=null;nav(p);}
 
 /* ---- 简易表单弹窗（复用既有 #mbox/#mbg，不干扰 openM）---- */
-function openForm(html){const mb=document.getElementById('mbox');mb.classList.remove('m-wide');mb.innerHTML=html;document.getElementById('mbg').classList.add('show');}
+function openForm(html){const mb=document.getElementById('mbox');mb.classList.remove('m-wide');mb.innerHTML=html;document.getElementById('mbg').classList.add('show');if(typeof wireSortables==='function')wireSortables();}
 
 /* ---- 供应商主档（复用 vendors）---- */
 function supplierList(){return d().vendors||[];}
@@ -3435,14 +3439,14 @@ function gridTable(mod,sup,month){
   const grand=cat.reduce((s,c)=>s+rAmt(c),0);
   const inv=dt=>gridInv(mod,sup,dt);
   const S=gEsc(sup);
-  const controls=w?`<div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap;"><button class="btn gold sm" onclick="addGridItem('${S}')">+ ${zh?"品项":"Item"}</button><span class="mini" style="align-self:center;color:var(--muted);">${zh?"↑↓排序 · ⧉复制 · 🗑删除":"↑↓ reorder · ⧉ copy · 🗑 delete"}</span></div>`:'';
-  const rowCtl=(c,arrows)=>w?`<div class="growctl"><span class="ib" title="${zh?(arrows==='lr'?'左移':'上移'):''}" onclick="moveGridItem('${mod}','${S}','${c.cid}',-1)">${arrows==='lr'?'←':'↑'}</span><span class="ib" title="${zh?(arrows==='lr'?'右移':'下移'):''}" onclick="moveGridItem('${mod}','${S}','${c.cid}',1)">${arrows==='lr'?'→':'↓'}</span><span class="ib" title="${zh?'复制此品项':'Duplicate'}" onclick="dupGridItem('${mod}','${S}','${c.cid}')">⧉</span><span class="ib gidel" title="${zh?'删除品项':'Delete'}" onclick="delGridItem('${mod}','${S}','${c.cid}','${month}')">🗑️</span></div>`:'';
+  const controls=w?`<div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap;"><button class="btn gold sm" onclick="addGridItem('${S}')">+ ${zh?"品项":"Item"}</button><span class="mini" style="align-self:center;color:var(--muted);">${zh?"按住 ☰ 拖动排序 · ⧉复制 · 🗑删除":"drag ☰ · ⧉ copy · 🗑 delete"}</span></div>`:'';
+  const rowCtl=(c,arrows)=>w?`<div class="growctl">${arrows==='ud'?`<span class="draghandle" title="${zh?'按住拖动排序':'Drag to reorder'}">☰</span>`:`<span class="ib" title="${zh?'左移':'Left'}" onclick="moveGridItem('${mod}','${S}','${c.cid}',-1)">←</span><span class="ib" title="${zh?'右移':'Right'}" onclick="moveGridItem('${mod}','${S}','${c.cid}',1)">→</span>`}<span class="ib" title="${zh?'复制此品项':'Duplicate'}" onclick="dupGridItem('${mod}','${S}','${c.cid}')">⧉</span><span class="ib gidel" title="${zh?'删除品项':'Delete'}" onclick="delGridItem('${mod}','${S}','${c.cid}','${month}')">🗑️</span></div>`:'';
   if(cat.length>10){
     // 行=品项，列=日期（整月每天）；品名/单位/规格/单价 冻结在左边
     const head=`<th class="gcode">Code</th><th class="gname">${zh?"品名":"Item"}</th><th class="gunit">${zh?"单位":"Unit"}</th><th class="gpack">${zh?"规格/送货":"Pack"}</th><th class="gprice">${zh?"单价":"Price"}</th>`+dates.map(dt=>`<th class="gcell">${w?`<input placeholder="Invoice No." value="${inv(dt)}" onchange="setGridInv('${mod}','${S}','${dt}',this.value)">`:`<span class="mini">${inv(dt)||'—'}</span>`}<div class="mini" style="margin-top:2px;">${dt.slice(5)}</div></th>`).join('')+`<th>${zh?"合计量":"Total Qty"}</th><th>${zh?"合计RM":"Total RM"}</th>`;
-    const body=cat.map((c,i)=>`<tr><td class="gcode"><input value="${c.code||''}" ${w?'':'disabled'} onchange="setGridCode('${mod}','${S}','${c.cid}',this.value)"></td><td class="gname"><input style="text-align:left;font-weight:700;" value="${(c.name||'').replace(/"/g,'&quot;')}" ${w?'':'disabled'} onchange="setGridName('${mod}','${S}','${c.cid}',this.value)">${rowCtl(c,'ud')}</td><td class="gunit"><input value="${c.uom||''}" ${w?'':'disabled'} onchange="setGridUom('${mod}','${S}','${c.cid}',this.value)"></td><td class="gpack"><input placeholder="10kg x 6/ctn" value="${(c.spec||'').replace(/"/g,'&quot;')}" ${w?'':'disabled'} onchange="setGridSpec('${mod}','${S}','${c.cid}',this.value)"></td><td class="gprice"><input type="number" step="0.01" value="${+c.price||0}" ${w?'':'disabled'} onchange="setGridPrice('${mod}','${S}','${c.cid}',this.value)"></td>${dates.map((dt,j)=>`<td class="gcell"><input type="number" step="0.01" value="${q(c.cid,dt)}" ${w?'':'disabled'} oninput="setGridQty('${mod}','${S}','${c.cid}','${dt}',this.value)"></td>`).join('')}<td class="gtot" id="gtq-${i}">${num(rQty(c),2)}</td><td class="gtot" id="gta-${i}">${money(rAmt(c))}</td></tr>`).join('')||`<tr><td colspan="${7+dates.length}" class="empty">${zh?"点『+ 品项』添加":"Add items"}</td></tr>`;
+    const body=cat.map((c,i)=>`<tr data-sortid="${c.cid}"><td class="gcode"><input value="${c.code||''}" ${w?'':'disabled'} onchange="setGridCode('${mod}','${S}','${c.cid}',this.value)"></td><td class="gname"><input style="text-align:left;font-weight:700;" value="${(c.name||'').replace(/"/g,'&quot;')}" ${w?'':'disabled'} onchange="setGridName('${mod}','${S}','${c.cid}',this.value)">${rowCtl(c,'ud')}</td><td class="gunit"><input value="${c.uom||''}" ${w?'':'disabled'} onchange="setGridUom('${mod}','${S}','${c.cid}',this.value)"></td><td class="gpack"><input placeholder="10kg x 6/ctn" value="${(c.spec||'').replace(/"/g,'&quot;')}" ${w?'':'disabled'} onchange="setGridSpec('${mod}','${S}','${c.cid}',this.value)"></td><td class="gprice"><input type="number" step="0.01" value="${+c.price||0}" ${w?'':'disabled'} onchange="setGridPrice('${mod}','${S}','${c.cid}',this.value)"></td>${dates.map((dt,j)=>`<td class="gcell"><input type="number" step="0.01" value="${q(c.cid,dt)}" ${w?'':'disabled'} oninput="setGridQty('${mod}','${S}','${c.cid}','${dt}',this.value)"></td>`).join('')}<td class="gtot" id="gtq-${i}">${num(rQty(c),2)}</td><td class="gtot" id="gta-${i}">${money(rAmt(c))}</td></tr>`).join('')||`<tr><td colspan="${7+dates.length}" class="empty">${zh?"点『+ 品项』添加":"Add items"}</td></tr>`;
     const dailyRow=`<tr class="gsum"><td class="gcode"></td><td class="gname">${zh?"每日合计RM":"Daily Total"}</td><td class="gunit"></td><td class="gpack"></td><td class="gprice"></td>${dates.map((dt,j)=>`<td id="gtd-${j}">${money(cat.reduce((s,c)=>s+(+q(c.cid,dt)||0)*(+c.price||0),0))}</td>`).join('')}<td></td><td></td></tr>`;
-    return `${controls}<div class="gwrap"><table class="gtbl"><thead><tr>${head}</tr></thead><tbody>${body}<tr class="gsum"><td class="gcode"></td><td class="gname">${zh?"本月合计":"Month Total"}</td><td class="gunit"></td><td class="gpack"></td><td class="gprice"></td>${dates.map(()=>'<td></td>').join('')}<td></td><td id="gtg">${money(grand)}</td></tr>${dailyRow}</tbody></table></div>`;
+    return `${controls}<div class="gwrap"><table class="gtbl"><thead><tr>${head}</tr></thead><tbody data-sort="grid" data-sup="${(sup||'').replace(/"/g,'&quot;')}">${body}</tbody><tbody><tr class="gsum"><td class="gcode"></td><td class="gname">${zh?"本月合计":"Month Total"}</td><td class="gunit"></td><td class="gpack"></td><td class="gprice"></td>${dates.map(()=>'<td></td>').join('')}<td></td><td id="gtg">${money(grand)}</td></tr>${dailyRow}</tbody></table></div>`;
   }
   // ≤10：行=日期（整月每天），列=品项；上方 单价 / 单位 / 规格 行；日期冻结在左边
   const head=`<th class="gdate">${zh?"日期":"Date"}</th><th>Invoice No.</th>`+cat.map(c=>`<th>${w?`<div class="gih"><input style="font-weight:700;" value="${(c.name||'').replace(/"/g,'&quot;')}" onchange="setGridName('${mod}','${S}','${c.cid}',this.value)">${rowCtl(c,'lr')}</div>`:c.name}</th>`).join('')+`<th>${zh?"当日RM":"Amt"}</th>`;
@@ -3776,9 +3780,9 @@ function openListMgr(kind){
   const zh=LANG==="zh";const isPos=kind==='positions';const list=isPos?empPositions():empNats();
   const title=isPos?(zh?'管理职位':'Positions'):(zh?'管理国籍':'Nationalities');
   openForm(`<h3>⚙ ${title} <span class="x" onclick="closeM()">×</span></h3>
-    <div>${list.map((x,i)=>`<div class="fr" style="display:flex;gap:6px;align-items:center;margin-bottom:6px;"><input style="flex:1;" value="${(x||'').replace(/"/g,'&quot;')}" onchange="lmRename('${kind}',${i},this.value)"><button class="ib" title="${zh?'上移':'Up'}" ${i===0?'disabled style="opacity:.3;"':''} onclick="lmMove('${kind}',${i},-1)">↑</button><button class="ib" title="${zh?'下移':'Down'}" ${i===list.length-1?'disabled style="opacity:.3;"':''} onclick="lmMove('${kind}',${i},1)">↓</button><button class="ib" onclick="lmDel('${kind}',${i})">🗑️</button></div>`).join('')||`<div class="empty">${zh?'空':'Empty'}</div>`}</div>
+    <div data-sort="list" data-kind="${kind}">${list.map((x,i)=>`<div class="fr" data-sortid="${i}" style="display:flex;gap:8px;align-items:center;margin-bottom:6px;"><span class="draghandle" title="${zh?'按住拖动排序':'Drag to reorder'}">☰</span><input style="flex:1;" value="${(x||'').replace(/"/g,'&quot;')}" onchange="lmRename('${kind}',${i},this.value)"><button class="ib" onclick="lmDel('${kind}',${i})">🗑️</button></div>`).join('')||`<div class="empty">${zh?'空':'Empty'}</div>`}</div>
     <button class="btn ghost sm" onclick="lmAdd('${kind}')">+ ${zh?'新增':'Add'}</button>
-    <div class="hint" style="margin-top:6px;">${zh?'↑↓ 调整顺序；改完关闭，重开员工表单即见更新。':'↑↓ reorder. Reopen staff form to see updates.'}</div>`);
+    <div class="hint" style="margin-top:6px;">${zh?'按住 ☰ 拖动排序；改完关闭，重开员工表单即见更新。':'Hold ☰ to drag-reorder.'}</div>`);
 }
 async function lmMove(kind,i,dir){const list=kind==='positions'?empPositions():empNats();const j=i+dir;if(j<0||j>=list.length)return;const t=list[i];list[i]=list[j];list[j]=t;await save();openListMgr(kind);}
 async function lmAdd(kind){const zh=LANG==="zh";const v=(prompt(zh?'新增名称：':'New:')||'').trim();if(!v)return;const list=kind==='positions'?empPositions():empNats();if(!list.includes(v))list.push(v);await save();openListMgr(kind);}
@@ -3899,6 +3903,30 @@ function pgPayrun(){
 /* 页面路由补充（ap/opex 不在底部tab，用函数导航） */
 const _pages={dash:pgDash,sales:pgSales,inv:pgInv,proc:pgProc,bom:pgBom,report:pgReport,settings:pgSettings,ap:pgAp,opex:pgOpex,opexm:pgOpexM,payroll:pgPayroll,payrun:pgPayrun,hr:pgHR,attend:pgAttend,schedule:pgSchedule,leave:pgLeave,ck:pgCK,stock:pgStock,
   purchase:pgPurchase,grn:pgGRN,transfer:pgTransfer,waste2:pgWaste2,offer:pgOffer,monthend:pgMonthEnd,monthly:pgMonthly,ordersheet:pgOrderSheet,orderinv:pgOrderInv};
+/* ================= 通用「拖动排序」☰（触屏+鼠标，无需库）=================
+   用法：容器加 data-sort="<类型>" (+ data-* 上下文)，子行加 data-sortid 与一个 .draghandle。
+   放手后调用 SORT_HANDLERS[类型](container, 新顺序ids)。 */
+const SORT_HANDLERS={
+  list(container,ids){const kind=container.dataset.kind;const list=kind==='positions'?empPositions():empNats();const nl=ids.map(i=>list[+i]).filter(x=>x!=null);if(kind==='positions')d().positions=nl;else d().nationalities=nl;save();openListMgr(kind);},
+  grid(container,ids){const sup=container.dataset.sup;const cat=ensureGridCat(sup);const nc=ids.map(cid=>cat.find(c=>c.cid===cid)).filter(Boolean);if(nc.length===cat.length){d().gridCat[sup]=nc;save();render();}}
+};
+function makeSortable(container){
+  if(!container||container._sortWired)return;container._sortWired=true;
+  let dragEl=null;
+  const kids=()=>[...container.querySelectorAll(':scope>[data-sortid]')];
+  const onMove=e=>{if(!dragEl)return;e.preventDefault();const y=e.clientY;let placed=false;
+    for(const r of kids()){if(r===dragEl)continue;const b=r.getBoundingClientRect();if(y<b.top+b.height/2){container.insertBefore(dragEl,r);placed=true;break;}}
+    if(!placed)container.appendChild(dragEl);};
+  const onUp=()=>{if(!dragEl)return;dragEl.classList.remove('sorting');
+    document.removeEventListener('pointermove',onMove);document.removeEventListener('pointerup',onUp);document.removeEventListener('pointercancel',onUp);
+    const ids=kids().map(r=>r.getAttribute('data-sortid'));const type=container.getAttribute('data-sort');dragEl=null;
+    const cb=SORT_HANDLERS[type];if(cb)cb(container,ids);};
+  kids().forEach(row=>{const h=row.querySelector('.draghandle');if(!h)return;
+    h.addEventListener('pointerdown',e=>{e.preventDefault();dragEl=row;row.classList.add('sorting');
+      document.addEventListener('pointermove',onMove);document.addEventListener('pointerup',onUp);document.addEventListener('pointercancel',onUp);});});
+}
+function wireSortables(){document.querySelectorAll('[data-sort]').forEach(makeSortable);}
+
 function render(){
   if(!pageAllowed(curPage)){curPage=firstAllowedPage();selSupplier=null;} // 权限收紧后自动落到可访问页
   renderTop();renderSidebar();
@@ -3907,6 +3935,7 @@ function render(){
   const preview=isPreviewing()?`<div class="al al-a" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><div><div class="t">👁 ${LANG==="zh"?"岗位预览模式":"Role Preview"}</div>${LANG==="zh"?`你正在以「${ROLES[curRole].name}」身份查看界面（真实身份：${curUser.name} · 老板/管理员）。`:`Previewing as ${ROLES[curRole].en}.`}</div><button class="btn ghost sm" onclick="exitPreview()">↩︎ ${LANG==="zh"?"退出预览":"Exit"}</button></div>`:'';
   document.getElementById('pageHost').innerHTML=`<div class="page active">${banner}${preview}${(_pages[curPage]||pgDash)()}</div>`;
   const mn=document.querySelector('.main');if(mn)mn.classList.toggle('wide',['payrun','monthend'].includes(curPage)); // 宽表页用满宽
+  wireSortables();
 }
 
 /* ================= 登录 / 身份验证 =================
