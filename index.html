@@ -612,7 +612,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0915d";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0915e";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -2374,7 +2374,9 @@ function orderListHTML(){
 }
 
 /* ---------- 订单提交 + 通知 ---------- */
-let ORDERS=[]; let _ordPollT=null; let _audioCtx=null;
+let ORDERS=[]; let _ordPollT=null; let _audioCtx=null; let _orderEditing=false;
+/* 订单是否有未同步到云端的本地改动（防止轮询用旧云端数据覆盖刚删/刚改的订单）*/
+function ordersWritePending(){const q=_cloudWrites['erpv2:orders'];return !!(q&&(q.running||q.pending!=null))||!!_odT;}
 async function loadOrders(){try{const r=await Store.get('erpv2:orders');ORDERS=r?JSON.parse(r.value):[];}catch(e){ORDERS=[];}}
 async function saveOrders(){try{await Store.set('erpv2:orders',JSON.stringify(ORDERS));}catch(e){}}
 function ordSeenKey(){return 'ordSeen:'+((curUser&&curUser.email)||'demo');}
@@ -2464,7 +2466,7 @@ async function sendOrderPush(order){
     await fetch(PUSH_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token,'apikey':SUPABASE_ANON_KEY},body:JSON.stringify({title,body,icon:BH_ICON})});
   }catch(e){}
 }
-function startOrderPoll(){if(_ordPollT)clearInterval(_ordPollT);if(!CLOUD)return;_ordPollT=setInterval(async()=>{if(!['owner','area'].includes(curRole))return;await loadOrders();notifyNewOrders();},10000);}
+function startOrderPoll(){if(_ordPollT)clearInterval(_ordPollT);if(!CLOUD)return;_ordPollT=setInterval(async()=>{if(!['owner','area'].includes(curRole))return;if(_orderEditing||ordersWritePending())return;await loadOrders();notifyNewOrders();},10000);}
 async function submitOrder(){
   const o=orderView();
   const gather=k=>(o[k]||[]).filter(it=>!it.divider&&String(it.q||'').trim()!=='').map(it=>({d:it.d,q:it.q}));
@@ -2486,6 +2488,7 @@ function orderLineHTML(order){
   return `<table class="tbl-mini" style="width:100%;border-collapse:collapse;margin-top:6px;font-size:12px;"><tbody>${rows}${uni}</tbody></table>`;
 }
 function openOrdersPanel(){
+  _orderEditing=false; // 回到列表=不再编辑单一订单
   markOrdersSeen();
   const list=[...ORDERS].sort((a,b)=>b.ts-a.ts);
   const body=list.length?list.map(o=>{
@@ -2524,7 +2527,7 @@ function odRow(id,arr,i,name,l){
   </tr>`;
 }
 function openOrderDetail(id){
-  const o=orderById(id);if(!o)return;const zh=LANG==="zh";
+  const o=orderById(id);if(!o)return;const zh=LANG==="zh";_orderEditing=true; // 打开订单详情=正在编辑，暂停轮询覆盖
   const rows=[
     ...(o.lines||[]).map((l,i)=>odRow(id,'lines',i,(l.d||'').replace(/\n/g,' / '),l)),
     ...(o.uniform||[]).map((u,i)=>odRow(id,'uniform',i,(zh?'制服 Uniform · Size ':'Uniform · Size ')+u.size,u))
@@ -3058,7 +3061,7 @@ function prefill(type,id){
 }
 function setV(id,val){const el=document.getElementById(id);if(el)el.value=val;}
 function setTitle(txt){const h=document.querySelector('#mbox h3');if(h)h.childNodes[0].textContent=txt+" ";}
-function closeM(){document.getElementById('mbg').classList.remove('show');}
+function closeM(){document.getElementById('mbg').classList.remove('show');_orderEditing=false;}
 document.getElementById('mbg').addEventListener('click',e=>{if(e.target.id==='mbg')closeM();});
 function poHint(){const s=document.getElementById('p_item');if(!s)return;const it=findItem(s.value);document.getElementById('poHint').innerHTML=it?`1 ${it.buyUnit} = ${it.conv} ${it.unit} · ${LANG==="zh"?"现价":"now"} ${money(it.cost)}/${it.unit}`:'';}
 function stTheory(){const s=document.getElementById('st_item');if(!s)return;const it=findItem(s.value);document.getElementById('st_theory').value=it?it.qty+' '+it.unit:'';}
