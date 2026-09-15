@@ -612,7 +612,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0915c";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0915d";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -1922,7 +1922,7 @@ async function delMonthSale(month,idx){if(!confirm(LANG==="zh"?"删除此销量�
 function pgOpex(){
   const m=costMonth;const locked=monthLocked(m);const o=curOpex(m);const own=!!(d().opexByMonth&&d().opexByMonth[m]);
   const groups=[
-    [LANG==="zh"?"人工成本":"Labour",[["salaries","薪资总额","Salaries"],["epf","EPF (雇主13%)","EPF"],["socso","SOCSO","SOCSO"],["eis","EIS 就业保险","EIS"],["levy","外劳人头税 Levy","Levy"],["ot","加班费 OT","Overtime"]]],
+    [LANG==="zh"?"人工成本":"Labour",[["salaries","薪资总额","Salaries"],["epf","EPF (雇主13%)","EPF"],["socso","SOCSO","SOCSO"],["eis","EIS 就业保险","EIS"],["levy","人头税 Levy","Levy"],["ot","加班费 OT","Overtime"]]],
     [LANG==="zh"?"租金":"Rent",[["rent","店面租金","Rent"],["commission","商场抽成","Commission"]]],
     [LANG==="zh"?"水电煤气":"Utilities",[["electricity","电费 TNB","Electricity"],["water","水费","Water"],["gas","煤气","Gas"]]],
     [LANG==="zh"?"营销与广告费":"Marketing",[["marketing","营销与广告","Marketing & Ads"]]],
@@ -1938,7 +1938,7 @@ function pgOpex(){
   <div class="seg" style="margin-bottom:8px;flex-wrap:wrap;">${availMonths().map(mm=>`<button class="${mm===m?'active':''}" onclick="setCostMonth('${mm}')">${monthLabel2(mm)}${monthLocked(mm)?' 🔒':''}</button>`).join('')}</div>
   <div class="hint">${LANG==="zh"?"运营开销按自然月独立核算，直接带入该月损益与净利。人工成本随『人事薪资』自动联动（也可手动改）。":"Per-month OpEx feeds that month's P&L. Labour auto-links to Payroll."}${hideSalary?(LANG==="zh"?" ⚠️ 你的角色只能看人工总数。":" ⚠️ Labour total only."):""}</div>
   ${locked?`<div class="al al-b" style="margin-bottom:8px;"><div class="t">🔒 ${LANG==="zh"?monthLabel2(m)+" 已月末锁定":"Locked"}</div>${LANG==="zh"?"该月开销已归档固定；如需修改请到『月度核算』解锁。":"Archived; unlock in Monthly."}</div>`:`<div class="hint" style="margin-bottom:8px;">${own?(LANG==="zh"?"📌 本月为专属开销（与其他月独立）。":"📌 Month-specific."):(LANG==="zh"?"📄 本月沿用默认开销；一旦编辑/同步即建立本月专属副本。":"📄 Using default template.")}</div>`}
-  ${(!hideSalary&&canSeeSalary())?`<div class="al ${labourSynced?'al-b':'al-a'}" style="margin-bottom:8px;"><div class="t">${labourSynced?('🔗 '+(LANG==="zh"?"人工成本 已与人事薪资一致":"Labour matches payroll")):('⚠️ '+(LANG==="zh"?"人工成本与人事薪资不一致":"Labour differs from payroll"))}</div>${LANG==="zh"?"人事薪资实际：薪资"+money(pl.salaries)+" · OT"+money(pl.ot)+" · EPF"+money(pl.epf)+" · SOCSO"+money(pl.socso)+" · EIS"+money(pl.eis)+" · 外劳税"+money(pl.levy)+(labourSynced?"":"　→ 点『🔗同步人事薪资』填入"):""}</div>`:''}
+  ${(!hideSalary&&canSeeSalary())?`<div class="al ${labourSynced?'al-b':'al-a'}" style="margin-bottom:8px;"><div class="t">${labourSynced?('🔗 '+(LANG==="zh"?"人工成本 已与人事薪资一致":"Labour matches payroll")):('⚠️ '+(LANG==="zh"?"人工成本与人事薪资不一致":"Labour differs from payroll"))}</div>${LANG==="zh"?"人事薪资实际：薪资"+money(pl.salaries)+" · OT"+money(pl.ot)+" · EPF"+money(pl.epf)+" · SOCSO"+money(pl.socso)+" · EIS"+money(pl.eis)+" · 人头税"+money(pl.levy)+(labourSynced?"":"　→ 点『🔗同步人事薪资』填入"):""}</div>`:''}
   ${groups.map(([g,rows])=>{
     const isLabour=rows.some(([k])=>labourKeys.includes(k));
     const gtotal=rows.reduce((s,[k])=>s+(+o[k]||0),0);
@@ -2042,7 +2042,7 @@ function autoSyncLabour(){ // 员工薪资变动→自动更新「默认模板 +
 }
 async function syncOpexFromPayroll(){
   if(monthLocked(costMonth))return alert(LANG==="zh"?"本月已月末锁定，请先解锁再同步。":"Month is locked.");
-  if(!confirm(LANG==="zh"?("用人事薪资的实际数据填入【"+monthLabel2(costMonth)+"】运营开销的人工成本（薪资/EPF/SOCSO/EIS/外劳税/OT）？之后仍可手动微调。"):"Fill labour OpEx from payroll?"))return;
+  if(!confirm(LANG==="zh"?("用人事薪资的实际数据填入【"+monthLabel2(costMonth)+"】运营开销的人工成本（薪资/EPF/SOCSO/EIS/人头税/OT）？之后仍可手动微调。"):"Fill labour OpEx from payroll?"))return;
   const pl=payrollLabour();const o=materializeOpex(costMonth);applyLabour(o,pl);applyLabour(opexTemplate(),pl);
   auditLog("同步人工成本","人事薪资→OpEx "+monthLabel2(costMonth),"",money(pl.salaries+pl.ot+pl.epf+pl.socso+pl.eis+pl.levy));await save();render();}
 function pgPayroll(){
@@ -2061,7 +2061,7 @@ function pgPayroll(){
     <div class="hint">${LANG==="zh"?"你的角色只能查看自己的薪资明细。":"You can view your own payslip only."}</div>
     <div class="card" style="padding:16px;">
       <div style="font-weight:800;font-size:16px;margin-bottom:2px;">${me.name}</div>
-      <div class="mini" style="margin-bottom:12px;">${me.role} · ${me.local?(LANG==="zh"?"本地 (有EPF)":"Local"):(LANG==="zh"?"外劳 (人头税)":"Foreign")}</div>
+      <div class="mini" style="margin-bottom:12px;">${me.role}${me.nationality?' · '+me.nationality:''}</div>
       <div class="pl">
         <div class="row"><span>${LANG==="zh"?"底薪 Basic":"Basic"}</span><b>${money(me.basic)}</b></div>
         <div class="row"><span>${LANG==="zh"?"津贴 Allowance":"Allowance"}</span><b>${money(me.allowance)}</b></div>
@@ -2083,7 +2083,7 @@ function pgPayroll(){
       <div class="kpi"><div class="k">${LANG==="zh"?"员工人数":"Headcount"}</div><div class="v">${headcount}</div></div>
       <div class="kpi"><div class="k">${LANG==="zh"?"薪资总额(应发)":"Gross Total"}</div><div class="v sm">${money(totGross)}</div></div>
       <div class="kpi"><div class="k">${LANG==="zh"?"雇主EPF(13%)":"Employer EPF"}</div><div class="v sm">${money(totEpfEr)}</div></div>
-      <div class="kpi"><div class="k">${LANG==="zh"?"外劳人头税":"Levy"}</div><div class="v sm">${money(totLevy)}</div></div>
+      <div class="kpi"><div class="k">${LANG==="zh"?"人头税 Levy":"Levy"}</div><div class="v sm">${money(totLevy)}</div></div>
     </div>
     <div class="pl" style="margin-top:12px;"><div class="row tot"><span>${LANG==="zh"?"人工成本总额":"Total Labour Cost"}</span><span>${money(totGross+totEpfEr+totLevy)}</span></div></div>`;
   }
@@ -2091,7 +2091,7 @@ function pgPayroll(){
   const staff=allStaff;const canSee=true;
   // 老板/人事经理/店长：看个人明细
   return `<div class="fb"><h2 class="h" style="margin:0;">👥 ${LANG==="zh"?"人事薪资 Payroll":"Payroll"} <span class="tag">${nm(outletObj())}</span></h2>${canW('payroll')?`<button class="btn gold sm" onclick="openM('emp')">+ ${LANG==="zh"?"员工":"Staff"}</button>`:''}</div>
-  <div class="hint">${LANG==="zh"?"每位员工的薪资明细（底薪+津贴+加班−EPF/SOCSO/EIS=实发）。本地员工有EPF，外劳有人头税Levy。":"Individual payslip breakdown."}</div>
+  <div class="hint">${LANG==="zh"?"每位员工的薪资明细（底薪+津贴+加班−EPF/SOCSO/EIS=实发）。EPF/SOCSO/EIS 依国籍与法定规则计算。":"Individual payslip breakdown."}</div>
   <div class="grid g3">
     <div class="kpi"><div class="k">${LANG==="zh"?"员工人数":"Headcount"}</div><div class="v sm">${headcount}</div></div>
     <div class="kpi"><div class="k">${LANG==="zh"?"应发总额":"Gross"}</div><div class="v sm">${money(totGross)}</div></div>
@@ -2102,7 +2102,7 @@ function pgPayroll(){
     <th>${LANG==="zh"?"员工":"Employee"}</th><th>${LANG==="zh"?"底薪":"Basic"}</th><th>${LANG==="zh"?"津贴":"Allow"}</th><th>OT</th><th>EPF</th><th>SOCSO</th><th>EIS</th><th>${LANG==="zh"?"人头税":"Levy"}</th><th>${LANG==="zh"?"实发":"Net"}</th>${canW('payroll')?`<th>${LANG==="zh"?"操作":"Action"}</th>`:''}
   </tr></thead><tbody>
     ${staff.map(e=>`<tr>
-      <td><b>${e.name}</b><br><span class="mini">${e.role} · ${e.local?(LANG==="zh"?"本地":"Local"):(LANG==="zh"?"外劳":"Foreign")}</span></td>
+      <td><b>${e.name}</b><br><span class="mini">${e.role}${e.nationality?' · '+e.nationality:''}</span></td>
       <td>${money(e.basic)}</td><td>${money(e.allowance)}</td><td>${money(e.ot)}</td>
       <td class="mini">${e.epf?money(e.epf):'—'}</td><td class="mini">${money(e.socso)}</td><td class="mini">${e.eis?money(e.eis):'—'}</td>
       <td class="mini">${e.levy?money(e.levy):'—'}</td>
@@ -2110,7 +2110,7 @@ function pgPayroll(){
       ${canW('payroll')?`<td><button class="ib" onclick="openM('emp',${e.id})">✏️</button> <button class="ib" onclick="delEmp(${e.id})">🗑️</button></td>`:''}
     </tr>`).join('')}
   </tbody><tfoot><tr style="background:#FAFBFC;font-weight:800;"><td>${LANG==="zh"?"合计":"Total"}</td><td>${money(staff.reduce((s,e)=>s+e.basic,0))}</td><td>${money(staff.reduce((s,e)=>s+e.allowance,0))}</td><td>${money(staff.reduce((s,e)=>s+e.ot,0))}</td><td colspan="4"></td><td class="pos">${money(totNet)}</td>${canW('payroll')?'<td></td>':''}</tr></tfoot></table></div>
-  <div class="mini" style="margin-top:8px;">${LANG==="zh"?"注：EPF 员工11%/雇主13%；SOCSO 员工0.5%；EIS 0.2%；外劳无EPF但需人头税。数字为示范。":"Demo figures."}</div>`;
+  <div class="mini" style="margin-top:8px;">${LANG==="zh"?"注：EPF 员工11%/雇主13%；SOCSO 员工0.5%；EIS 0.2%。EPF 依国籍与法定规则。数字为示范。":"Demo figures."}</div>`;
 }
 
 /* ---- 可视化图表（营业额趋势线 + 成本结构 + 各店对比）---- */
@@ -2243,7 +2243,7 @@ function pgHR(){
   <div class="hint">${selfOnly?(LANG==="zh"?"你的角色只能查看自己的档案。":"You can view your own profile only."):(LANG==="zh"?"本店员工档案。点 ✏️ 编辑基本资料。":"Branch staff profiles.")}</div>
   ${staff.map(e=>`<div class="card" style="padding:13px;margin-bottom:9px;">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-      <div><div style="font-weight:800;font-size:15px;">${e.name}</div><div class="mini">${e.role} · ${e.local?(LANG==="zh"?"本地":"Local"):(LANG==="zh"?"外劳":"Foreign")}</div></div>
+      <div><div style="font-weight:800;font-size:15px;">${e.name}</div><div class="mini">${e.empNo?e.empNo+' · ':''}${e.role}${e.nationality?' · '+e.nationality:''}</div></div>
       ${canW('hr')&&!selfOnly?`<div><button class="ib" onclick="openM('emp',${e.id})">✏️</button> <button class="ib" onclick="delEmp(${e.id})">🗑️</button></div>`:''}
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:9px;font-size:12px;">
@@ -3024,7 +3024,7 @@ function openM(type,editId){
       <div class="fg3"><div class="fr"><label>${LANG==="zh"?"底薪":"Basic"}</label><input id="em_basic" type="number"></div>
       <div class="fr"><label>${LANG==="zh"?"津贴":"Allow"}</label><input id="em_allow" type="number" value="0"></div>
       <div class="fr"><label>${LANG==="zh"?"孩子数":"Children"}</label><input id="em_children" type="number" value="0" min="0"></div></div>
-      <div class="hint">${LANG==="zh"?"法定扣除(EPF/SOCSO/EIS/SL24J/PCB)在『薪资发放 Payroll』按马来西亚公式自动算。EPF 依国籍(马来西亚=本地)判定。":"Statutory deductions auto-calculated in Payroll Run."}</div>
+      <div class="hint">${LANG==="zh"?"法定扣除(EPF/SOCSO/EIS/SL24J/PCB)在『薪资发放 Payroll』按马来西亚公式自动算。EPF 依国籍自动判定（马来西亚籍有 EPF）。":"Statutory deductions auto-calculated in Payroll Run."}</div>
       <button class="btn block brand" onclick="saveEmp()">${LANG==="zh"?"保存员工":"Save"}</button>`,
     opex:`<h3>✎ ${LANG==="zh"?"编辑运营开销":"Edit OpEx"} <span class="tag">${monthLabel2(costMonth)}</span> <span class="x" onclick="closeM()">×</span></h3>
       <div class="hint" style="margin-bottom:6px;">${LANG==="zh"?"仅修改本月（"+monthLabel2(costMonth)+"）的开销，其他月份不受影响。":"Edits this month only."}</div>
@@ -3764,10 +3764,11 @@ function openListMgr(kind){
   const zh=LANG==="zh";const isPos=kind==='positions';const list=isPos?empPositions():empNats();
   const title=isPos?(zh?'管理职位':'Positions'):(zh?'管理国籍':'Nationalities');
   openForm(`<h3>⚙ ${title} <span class="x" onclick="closeM()">×</span></h3>
-    <div>${list.map((x,i)=>`<div class="fr" style="display:flex;gap:6px;align-items:center;margin-bottom:6px;"><input value="${(x||'').replace(/"/g,'&quot;')}" onchange="lmRename('${kind}',${i},this.value)"><button class="ib" onclick="lmDel('${kind}',${i})">🗑️</button></div>`).join('')||`<div class="empty">${zh?'空':'Empty'}</div>`}</div>
+    <div>${list.map((x,i)=>`<div class="fr" style="display:flex;gap:6px;align-items:center;margin-bottom:6px;"><input style="flex:1;" value="${(x||'').replace(/"/g,'&quot;')}" onchange="lmRename('${kind}',${i},this.value)"><button class="ib" title="${zh?'上移':'Up'}" ${i===0?'disabled style="opacity:.3;"':''} onclick="lmMove('${kind}',${i},-1)">↑</button><button class="ib" title="${zh?'下移':'Down'}" ${i===list.length-1?'disabled style="opacity:.3;"':''} onclick="lmMove('${kind}',${i},1)">↓</button><button class="ib" onclick="lmDel('${kind}',${i})">🗑️</button></div>`).join('')||`<div class="empty">${zh?'空':'Empty'}</div>`}</div>
     <button class="btn ghost sm" onclick="lmAdd('${kind}')">+ ${zh?'新增':'Add'}</button>
-    <div class="hint" style="margin-top:6px;">${zh?'改完关闭，重开员工表单即见更新。':'Reopen staff form to see updates.'}</div>`);
+    <div class="hint" style="margin-top:6px;">${zh?'↑↓ 调整顺序；改完关闭，重开员工表单即见更新。':'↑↓ reorder. Reopen staff form to see updates.'}</div>`);
 }
+async function lmMove(kind,i,dir){const list=kind==='positions'?empPositions():empNats();const j=i+dir;if(j<0||j>=list.length)return;const t=list[i];list[i]=list[j];list[j]=t;await save();openListMgr(kind);}
 async function lmAdd(kind){const zh=LANG==="zh";const v=(prompt(zh?'新增名称：':'New:')||'').trim();if(!v)return;const list=kind==='positions'?empPositions():empNats();if(!list.includes(v))list.push(v);await save();openListMgr(kind);}
 async function lmRename(kind,i,v){v=(v||'').trim();const list=kind==='positions'?empPositions():empNats();if(v)list[i]=v;await save();}
 async function lmDel(kind,i){const zh=LANG==="zh";if(!confirm(zh?'删除此项？':'Delete?'))return;const list=kind==='positions'?empPositions():empNats();list.splice(i,1);await save();openListMgr(kind);}
@@ -3792,7 +3793,7 @@ function payslipHTML(e,pageBreak){
       <div><div style="font-weight:800;font-size:16px;">${t2('appTitle')}</div><div class="mini">${nm(outletObj())} · ${zh?'薪资单 Payslip':'Payslip'}</div></div>
       <div style="text-align:right;"><div style="font-weight:800;">${monthLabel2(payrunMonth)}</div></div>
     </div>
-    <div style="margin:10px 0 8px;font-weight:800;">${e.name} <span class="mini" style="font-weight:600;">· ${e.empNo?e.empNo+' · ':''}${e.role} · ${e.nationality||(e.local!==false?(zh?'本地':'Local'):(zh?'外劳':'Foreign'))}</span></div>
+    <div style="margin:10px 0 8px;font-weight:800;">${e.name} <span class="mini" style="font-weight:600;">· ${e.empNo?e.empNo+' · ':''}${e.role}${e.nationality?' · '+e.nationality:''}</span></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
       <div><div style="font-weight:800;margin-bottom:4px;">${zh?'收入 Earnings':'Earnings'}</div>
         ${R(zh?'底薪 Basic':'Basic',c.basic)}${R(zh?'津贴 Allowance':'Allowance',c.allowance)}${R(zh?'奖励 Incentive':'Incentive',c.incentive)}${R((zh?'加班 OT':'OT')+' ('+num(c.otHours,1)+'h×'+c.otMult+')',c.otAmt)}
