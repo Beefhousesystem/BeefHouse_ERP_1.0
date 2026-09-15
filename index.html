@@ -607,7 +607,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0913e";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0915a";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -1473,10 +1473,8 @@ function pgProc(){
       <div class="mini" style="margin-top:2px;">${desc}</div>
     </button>`).join('')}
   </div>
-  ${can('ck')&&outletObj().ck?`<button class="btn block" style="background:var(--purple);margin-bottom:8px;" onclick="nav('ck')">🏭 ${LANG==="zh"?"中央厨房生产":"Central Kitchen Production"}</button>`:''}
-  ${can('ap')?`<button class="btn ghost block sm" style="margin-bottom:8px;" onclick="nav('ap')">💳 ${LANG==="zh"?"查看应付账款 (Accounts Payable)":"View Payables"}</button>`:''}
-  ${can('opex')?`<button class="btn ghost block sm" style="margin-bottom:8px;" onclick="nav('opex')">💵 ${LANG==="zh"?"运营开销 (OpEx)":"OpEx"}</button>`:''}
-  ${canW('payroll')?`<button class="btn ghost block sm" style="margin-bottom:12px;" onclick="nav('payroll')">👥 ${LANG==="zh"?"人事薪资 (Payroll)":"Payroll"}</button>`:''}`;
+  ${can('ck')&&outletObj().ck?`<button class="btn block" style="background:var(--purple);margin-bottom:8px;" onclick="nav('ck')">🏭 ${LANG==="zh"?"中央厨房生产":"Central Kitchen Production"}</button>`:''}`;
+  // 应付账款/运营开销/人事薪资 三个入口已移出「采购进销」（各自在侧栏 财务/人事 组里）
 }
 function var_green(){return"#2E7D46";}function var_blue(){return"#2A5FA0";}function var_navy(){return"#12203A";}function var_red(){return"#B23A3A";}function var_amber(){return"#C08A2E";}function var_purple(){return"#6B4E9E";}function var_teal(){return"#0F5C4E";}
 function setMF(f){moveFilter=f;render();}
@@ -2653,18 +2651,19 @@ function osTable(sup){
 function pgOrderSheet(){
   const back=`<button class="btn ghost sm" onclick="nav('proc')">← ${LANG==="zh"?"进销存作业":"Operations"}</button>`;
   if(!selSupplier){
-    const sups=supplierList();
+    const sups=supplierList();const wSup=canW('proc'); // 店长及以上可改/删/加供应商
     const cards=sups.map(v=>{
       const isck=isCkOrderSup(v.name);
       return `<div class="card" style="padding:13px;margin-bottom:9px;cursor:pointer;" onclick="setSupplier('${v.name.replace(/'/g,"\\'")}')">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
           <div><div style="font-weight:800;font-size:15px;">🏢 ${v.name}${isck?` <span class="tag">${LANG==="zh"?"含图片":"photos"}</span>`:''}</div>
           <div class="mini">${LANG==="zh"?"点进去下单":"Tap to order"}</div></div>
-          <div><span class="mini">›</span></div>
+          <div style="white-space:nowrap;">${wSup?`<button class="ib" title="${LANG==="zh"?'改名':'Rename'}" onclick="event.stopPropagation();renameSupplier(${v.id})">✏️</button> <button class="ib" title="${LANG==="zh"?'删除':'Delete'}" onclick="event.stopPropagation();delSupplier(${v.id})">🗑️</button> `:''}<span class="mini">›</span></div>
         </div></div>`;
-    }).join('')||`<div class="empty">${LANG==="zh"?"暂无供应商，请先在『进货单』新增供应商。":"No suppliers"}</div>`;
+    }).join('')||`<div class="empty">${LANG==="zh"?"暂无供应商，点『+ 新增供应商』添加。":"No suppliers"}</div>`;
     return `<div class="fb"><h2 class="h" style="margin:0;">🛒 ${LANG==="zh"?"订货单":"Order Sheet"} <span class="tag">${nm(outletObj())}</span></h2>${back}</div>
       <div class="hint">${LANG==="zh"?"点选供应商 → 填数量 → 🛒下单（会通知老板与区域副经理）。中央厨房 (TCY OKR) 含图片版。":"Pick supplier → qty → order."}</div>
+      ${wSup?`<div style="margin-bottom:9px;"><button class="btn gold sm" onclick="addSupplier()">+ ${LANG==="zh"?"新增供应商":"Add Supplier"}</button></div>`:''}
       ${cards}`;
   }
   const supHead=`<div class="fb"><h2 class="h" style="margin:0;">🛒 ${selSupplier}</h2><button class="btn ghost sm" onclick="backSupplier()">← ${LANG==="zh"?"供应商列表":"Suppliers"}</button></div>`;
@@ -3291,7 +3290,11 @@ async function doImportCatalog(){
   _aggCache=null;closeM();render();
   alert(zh?`已导入：供应商 +${sTot}，品项 +${iTot}（重复已跳过）。`:`Imported ${sTot} suppliers, ${iTot} items.`);
 }
-async function renameSupplier(id){const v=supplierList().find(x=>x.id===id);if(!v)return;const nn=prompt(LANG==="zh"?"修改供应商名称":"Rename supplier",v.name);if(!nn||!nn.trim()||nn.trim()===v.name)return;const old=v.name;v.name=nn.trim();['purchases','grn','monthEnd'].forEach(k=>(d()[k]||[]).forEach(r=>{if(r.supplier===old)r.supplier=v.name;}));auditLog("重命名供应商",old+"→"+v.name,old,v.name);await save();render();}
+async function renameSupplier(id){const v=supplierList().find(x=>x.id===id);if(!v)return;const nn=prompt(LANG==="zh"?"修改供应商名称":"Rename supplier",v.name);if(!nn||!nn.trim()||nn.trim()===v.name)return;const old=v.name;const nm2=nn.trim();if(supplierList().some(x=>x.id!==id&&x.name===nm2))return alert(LANG==="zh"?"已有同名供应商":"Name exists");v.name=nm2;['purchases','grn','monthEnd'].forEach(k=>(d()[k]||[]).forEach(r=>{if(r.supplier===old)r.supplier=nm2;}));
+  // 同步迁移按供应商名存的表：订货单自定义品项、进销存网格目录
+  if(d().orderSheets&&d().orderSheets[old]!=null){d().orderSheets[nm2]=d().orderSheets[old];delete d().orderSheets[old];}
+  if(d().gridCat&&d().gridCat[old]!=null){d().gridCat[nm2]=d().gridCat[old];delete d().gridCat[old];}
+  auditLog("重命名供应商",old+"→"+nm2,old,nm2);await save();render();}
 async function delSupplier(id){const v=supplierList().find(x=>x.id===id);if(!v)return;const cnt=['purchases','grn','monthEnd'].reduce((s,k)=>s+((d()[k]||[]).filter(r=>r.supplier===v.name).length),0);if(!confirm(LANG==="zh"?`删除供应商「${v.name}」？${cnt?"其 "+cnt+" 笔历史单据会保留但不再显示在列表。":""}`:`Delete supplier "${v.name}"?`))return;d().vendors=d().vendors.filter(x=>x.id!==id);auditLog("删除供应商",v.name,"","");await save();render();}
 async function clearSuppliers(){
   const zh=LANG==="zh";
