@@ -612,7 +612,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0915e";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0915f";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -1190,7 +1190,7 @@ function auditLog(act,detail,oldv,newv){
 function can(p){return ROLES[curRole].can.includes(p);}
 // 作业中心(proc)只要拥有任一子作业权限即可进入；子页与页面级访问统一由 pageAllowed 判定
 function hasAnyOp(){return ['proc','transfer','waste','ent','stock'].some(p=>can(p));}
-function pageAllowed(p){if(p==='proc')return hasAnyOp();if(p==='monthly')return can('report');if(p==='opexm')return can('opex');if(p==='payrun')return can('payroll');if(p==='orderinv')return ['owner','area','manager','headchef'].includes(curRole);if(typeof PROC_SUB!=='undefined'&&PROC_SUB[p])return can(PROC_SUB[p]);return can(p);}
+function pageAllowed(p){if(p==='proc')return hasAnyOp();if(p==='monthly')return can('report');if(p==='opexm')return can('opex');if(p==='payrun')return can('payroll')&&canSeeSalary();if(p==='orderinv')return ['owner','area','manager','headchef'].includes(curRole);if(typeof PROC_SUB!=='undefined'&&PROC_SUB[p])return can(PROC_SUB[p]);return can(p);}
 function firstAllowedPage(){const order=['dash','attend','leave','payroll','hr','schedule','sales','inv','proc','ck','stock','opex','ap','bom','report','settings'];for(const p of order)if(pageAllowed(p))return p;return 'dash';}
 function canW(p){return can(p)&&!isAgg();} // 汇总视图为只读
 function renderTop(){
@@ -2011,10 +2011,18 @@ async function saveOpexM(){
 function empGross(e){return e.basic+e.allowance+e.ot;}
 function empNet(e){return empGross(e)-e.epf-e.socso-e.eis;}
 /* 人工成本从人事薪资汇总（供 OpEx 联动）*/
-function payrollLabour(){
-  const st=d().staff||[];let salaries=0,ot=0,epf=0,socso=0,eis=0,levy=0;
-  st.forEach(e=>{salaries+=(+e.basic||0)+(+e.allowance||0);ot+=(+e.ot||0);epf+=(e.local?Math.round((+e.basic||0)*0.13):0);socso+=(+e.socso||0);eis+=(+e.eis||0);levy+=(+e.levy||0);});
-  return {salaries,ot,epf,socso,eis,levy};
+/* 人工成本 = 用『薪资发放 Payroll』同一套马来西亚法定引擎(computeRow)算，
+   使运营开销的人工成本 与 Payroll 的雇主总成本 完全一致。
+   salaries=底薪+津贴+奖励；ot=加班额；epf/socso/eis=雇主承担；levy=人头税。 */
+function payrollLabour(month){
+  month=month||(typeof costMonth!=='undefined'?costMonth:TODAY.slice(0,7));
+  const prev=(typeof payrunMonth!=='undefined')?payrunMonth:null;
+  if(typeof payrunMonth!=='undefined')payrunMonth=month;
+  let salaries=0,ot=0,epf=0,socso=0,eis=0,levy=0;
+  (d().staff||[]).forEach(e=>{const c=computeRow(e);salaries+=c.basic+c.allowance+c.incentive;ot+=c.otAmt;epf+=c.epf.er;socso+=c.soc.er;eis+=c.eis.er;levy+=c.levy;});
+  if(prev!=null)payrunMonth=prev;
+  const r2=n=>+(+n).toFixed(2);
+  return {salaries:r2(salaries),ot:r2(ot),epf:r2(epf),socso:r2(socso),eis:r2(eis),levy:r2(levy)};
 }
 /* ---- 按自然月独立的运营开销 ----
    d().opex 作为「默认模板」（新月份的初始值、大盘/ALL 聚合回退）；
@@ -3706,7 +3714,7 @@ function taxResident(ci){ // YA2025 居民累进税
 }
 function otHourly(basic){return (+basic||0)/26/8;}       // 马来西亚标准：月薪/26天/8小时
 function computeRow(e){
-  const ov=(payrunData().ov[e.id])||{};
+  const _r=(d().payrollRuns&&d().payrollRuns[payrunMonth]);const ov=(_r&&_r.ov&&_r.ov[e.id])||{};
   const basic=+e.basic||0;
   const allowance=ov.allowance!=null?(+ov.allowance||0):(+e.allowance||0);
   const incentive=+ov.incentive||0;
@@ -3752,14 +3760,15 @@ function payLiveRecalc(id){
   payReadRow(id);const e=(d().staff||[]).find(s=>s.id===id);if(!e)return;const c=computeRow(e);
   _setTxt('po-ot-'+id,payNum(c.otAmt));_setTxt('po-gross-'+id,payNum(c.gross));
   _setTxt('po-epf-'+id,payNum(c.epf.ee));_setTxt('po-soc-'+id,payNum(c.soc.ee));_setTxt('po-eis-'+id,payNum(c.eis.ee));
+  _setTxt('po-epfer-'+id,payNum(c.epf.er));_setTxt('po-socer-'+id,payNum(c.soc.er));_setTxt('po-eiser-'+id,payNum(c.eis.er));
   _setTxt('po-sl-'+id,payNum(c.sl));_setTxt('po-net-'+id,payNum(c.net));
   const pl=document.getElementById('po-pcblbl-'+id);if(pl)pl.textContent=((payrunData().ov[id]||{}).pcb!=null?(LANG==="zh"?'手改':'edit'):(LANG==="zh"?'自动':'auto'));
   payTotalsRecalc();payDebouncedSave();
 }
 function payTotalsRecalc(){
   const rows=(d().staff||[]).map(e=>computeRow(e));
-  const T=rows.reduce((a,c)=>{a.gross+=c.gross;a.epfEe+=c.epf.ee;a.socEe+=c.soc.ee;a.eisEe+=c.eis.ee;a.sl+=c.sl;a.pcb+=c.pcb;a.net+=c.net;a.er+=c.erCost;return a;},{gross:0,epfEe:0,socEe:0,eisEe:0,sl:0,pcb:0,net:0,er:0});
-  _setTxt('pt-gross',payNum(T.gross));_setTxt('pt-epf',payNum(T.epfEe));_setTxt('pt-soc',payNum(T.socEe));_setTxt('pt-eis',payNum(T.eisEe));_setTxt('pt-sl',payNum(T.sl));_setTxt('pt-pcb',payNum(T.pcb));_setTxt('pt-net',payNum(T.net));
+  const T=rows.reduce((a,c)=>{a.gross+=c.gross;a.epfEe+=c.epf.ee;a.socEe+=c.soc.ee;a.eisEe+=c.eis.ee;a.epfEr+=c.epf.er;a.socEr+=c.soc.er;a.eisEr+=c.eis.er;a.sl+=c.sl;a.pcb+=c.pcb;a.net+=c.net;a.er+=c.erCost;return a;},{gross:0,epfEe:0,socEe:0,eisEe:0,epfEr:0,socEr:0,eisEr:0,sl:0,pcb:0,net:0,er:0});
+  _setTxt('pt-gross',payNum(T.gross));_setTxt('pt-epf',payNum(T.epfEe));_setTxt('pt-soc',payNum(T.socEe));_setTxt('pt-eis',payNum(T.eisEe));_setTxt('pt-epfer',payNum(T.epfEr));_setTxt('pt-socer',payNum(T.socEr));_setTxt('pt-eiser',payNum(T.eisEr));_setTxt('pt-sl',payNum(T.sl));_setTxt('pt-pcb',payNum(T.pcb));_setTxt('pt-net',payNum(T.net));
   _setTxt('pt-netbig',money(T.net));_setTxt('pt-erbig',money(T.er));
 }
 /* 职位 / 国籍 列表管理（HR 可自行增删改） */
@@ -3819,7 +3828,8 @@ function openPayslipAll(){const list=(d().staff||[]);if(!list.length)return;if(!
 function setPayslipMode(m){payslipMode=m;if(m!=='single')payslipPick={};render();window.scrollTo(0,0);}
 function togglePayslipPick(id){payslipPick[id]=!payslipPick[id];render();}
 function pgPayrun(){
-  const zh=LANG==="zh";const w=canW('payroll');const staff=(d().staff||[]);
+  const zh=LANG==="zh";const w=canW('payroll')&&canSeeSalary();const staff=(d().staff||[]);
+  if(!canSeeSalary())return `<h2 class="h">🧮 ${zh?'薪资发放 Payroll':'Payroll Run'}</h2><div class="al al-a"><div class="t">🔒 ${zh?'权限限制':'Restricted'}</div>${zh?'只有老板 / 人事经理(HR)可以查看与编辑薪资发放。':'Only Owner/HR can access Payroll.'}</div>`;
   const run=payrunData();const fin=run.finalized;const cfg=payCfg();
   // ---- Payslip：选择模式 ----
   if(payslipMode==='menu'){
@@ -3857,21 +3867,25 @@ function pgPayrun(){
     <td style="text-align:right;color:#B42318;"><span id="po-epf-${e.id}">${num2(c.epf.ee)}</span></td>
     <td style="text-align:right;color:#B42318;"><span id="po-soc-${e.id}">${num2(c.soc.ee)}</span></td>
     <td style="text-align:right;color:#B42318;"><span id="po-eis-${e.id}">${num2(c.eis.ee)}</span></td>
+    <td style="text-align:right;color:#0F5C4E;background:#F3FAF7;"><span id="po-epfer-${e.id}">${num2(c.epf.er)}</span></td>
+    <td style="text-align:right;color:#0F5C4E;background:#F3FAF7;"><span id="po-socer-${e.id}">${num2(c.soc.er)}</span></td>
+    <td style="text-align:right;color:#0F5C4E;background:#F3FAF7;"><span id="po-eiser-${e.id}">${num2(c.eis.er)}</span></td>
     <td style="text-align:center;"><input type="checkbox" id="pi-sl-${e.id}" ${dis} ${ov.sl24jOn!==false?'checked':''} onchange="${RC}"><br><span class="mini" style="color:#B42318;"><span id="po-sl-${e.id}">${num2(c.sl)}</span></span><br><span class="mini" style="opacity:.7;">${c.slLabel}</span></td>
     <td style="text-align:center;"><input type="checkbox" id="pi-marr-${e.id}" ${dis} ${e.married?'checked':''} onchange="${RC}"></td>
     <td><input id="pi-child-${e.id}" style="width:42px;padding:6px 4px;border:1px solid var(--line);border-radius:6px;text-align:right;font-size:12.5px;" type="number" step="1" min="0" ${dis} value="${+e.children||0}" oninput="${RC}"></td>
     <td><input id="pi-pcb-${e.id}" ${NI} type="number" step="0.01" ${dis} value="${pcbShown}" placeholder="auto" title="${zh?'留空=自动估算':'blank=auto'}" oninput="${RC}"><br><span class="mini" id="po-pcblbl-${e.id}">${ov.pcb!=null?(zh?'手改':'edit'):(zh?'自动':'auto')}</span></td>
     <td style="text-align:right;" class="mini">${num2(c.levy)}</td>
     <td class="pstickR" style="text-align:right;font-weight:800;"><span id="po-net-${e.id}">${num2(c.net)}</span></td>
-  </tr>`;}).join('')||`<tr><td colspan="18" class="empty">${zh?'暂无员工（请先到人事档案添加）':'No staff'}</td></tr>`;
+  </tr>`;}).join('')||`<tr><td colspan="21" class="empty">${zh?'暂无员工（请先到人事档案添加）':'No staff'}</td></tr>`;
   const th=(t)=>`<th style="padding:5px 6px;white-space:nowrap;">${t}</th>`;
-  const head=`<tr>${th(zh?'员工':'Staff')}${th(zh?'底薪':'Basic')}${th(zh?'津贴':'Allow')}${th(zh?'奖励':'Incent')}${th('OT时')}${th('OT倍')}${th('OT额')}${th(zh?'应发':'Gross')}${th('EPF员')}${th('SOCSO员')}${th('EIS员')}${th('SL24J')}${th(zh?'已婚':'Marr')}${th(zh?'孩':'Child')}${th('PCB')}${th(zh?'人头税':'Levy')}${th(zh?'实发':'Net')}</tr>`;
+  const thE=(t)=>`<th style="padding:5px 6px;white-space:nowrap;background:#E6F2EC;color:#0F5C4E;">${t}</th>`;
+  const head=`<tr>${[zh?'员工':'Staff',zh?'底薪':'Basic',zh?'津贴':'Allow',zh?'奖励':'Incent','OT时','OT倍','OT额',zh?'应发':'Gross','EPF员','SOCSO员','EIS员'].map(t=>`<th style="padding:5px 6px;white-space:nowrap;">${t}</th>`).join('')}${thE('EPF雇')}${thE('SOCSO雇')}${thE('EIS雇')}${['SL24J',zh?'已婚':'Marr',zh?'孩':'Child','PCB',zh?'人头税':'Levy',zh?'实发':'Net'].map(t=>`<th style="padding:5px 6px;white-space:nowrap;">${t}</th>`).join('')}</tr>`;
   return `<div class="fb"><h2 class="h" style="margin:0;">🧮 ${zh?'薪资发放 Payroll':'Payroll Run'} <span class="tag">${monthLabel2(payrunMonth)}${fin?' 🔒':''}</span></h2>
     <span class="mini" style="opacity:.7;">SL24J ${zh?'按工龄自动 (0.75→1.0→1.25%)':'auto by tenure'}</span></div>
   ${monthSeg}
   <div class="hint">${zh?'底薪从『员工档案』自动带入；津贴/奖励/OT时数可改，一填数字即时结算。OT = 时数 × (底薪÷26÷8) × 倍数。EPF/SOCSO/EIS 按官方附表；SL24J 员工承担(按工龄自动)；PCB 为估算(可手改，留空=自动)，正式以 LHDN e-PCB 为准。人头税暂为 0。':'Basic auto from staff profile; edits settle instantly. Statutory per official schedules; PCB estimate.'}</div>
   <div class="gwrap" style="max-height:66vh;"><table class="gtbl ptbl" style="font-size:12.5px;"><thead>${head}</thead><tbody>${body}
-    <tr class="gsum" style="font-weight:800;"><td class="pstick">${zh?'合计':'Total'}</td><td></td><td></td><td></td><td></td><td></td><td></td><td style="text-align:right;"><span id="pt-gross">${num2(T.gross)}</span></td><td style="text-align:right;"><span id="pt-epf">${num2(T.epfEe)}</span></td><td style="text-align:right;"><span id="pt-soc">${num2(T.socEe)}</span></td><td style="text-align:right;"><span id="pt-eis">${num2(T.eisEe)}</span></td><td style="text-align:right;"><span id="pt-sl">${num2(T.sl)}</span></td><td></td><td></td><td style="text-align:right;"><span id="pt-pcb">${num2(T.pcb)}</span></td><td></td><td class="pstickR" style="text-align:right;"><span id="pt-net">${num2(T.net)}</span></td></tr>
+    <tr class="gsum" style="font-weight:800;"><td class="pstick">${zh?'合计':'Total'}</td><td></td><td></td><td></td><td></td><td></td><td></td><td style="text-align:right;"><span id="pt-gross">${num2(T.gross)}</span></td><td style="text-align:right;"><span id="pt-epf">${num2(T.epfEe)}</span></td><td style="text-align:right;"><span id="pt-soc">${num2(T.socEe)}</span></td><td style="text-align:right;"><span id="pt-eis">${num2(T.eisEe)}</span></td><td style="text-align:right;background:#F3FAF7;"><span id="pt-epfer">${num2(T.epfEr)}</span></td><td style="text-align:right;background:#F3FAF7;"><span id="pt-socer">${num2(T.socEr)}</span></td><td style="text-align:right;background:#F3FAF7;"><span id="pt-eiser">${num2(T.eisEr)}</span></td><td style="text-align:right;"><span id="pt-sl">${num2(T.sl)}</span></td><td></td><td></td><td style="text-align:right;"><span id="pt-pcb">${num2(T.pcb)}</span></td><td></td><td class="pstickR" style="text-align:right;"><span id="pt-net">${num2(T.net)}</span></td></tr>
   </tbody></table></div>
   <div class="pl" style="margin-top:10px;"><div class="row"><span>${zh?'员工实发总额 Net':'Total Net'}</span><b id="pt-netbig">${money(T.net)}</b></div><div class="row"><span>${zh?'雇主总成本 (含EPF/SOCSO/EIS雇主)':'Employer Cost'}</span><b id="pt-erbig">${money(T.er)}</b></div></div>
   ${w?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
