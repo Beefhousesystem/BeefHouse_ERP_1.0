@@ -247,6 +247,7 @@
   .side button .si{font-size:15px;width:18px;text-align:center;}
   .side .lock{margin-left:auto;font-size:10px;opacity:.5;}
   .main{flex:1;min-width:0;padding:16px;max-width:1080px;}
+  .main.wide{max-width:100%;}
   .menu-btn{display:none;background:none;border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:7px;padding:5px 9px;font-size:15px;cursor:pointer;}
   @media(max-width:760px){
     .side{position:fixed;left:0;top:44px;z-index:80;width:230px;box-shadow:2px 0 20px rgba(0,0,0,.3);transform:translateX(-100%);transition:transform .2s;}
@@ -611,7 +612,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0915b";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0915c";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -3010,13 +3011,20 @@ function openM(type,editId){
       <div class="fr"><label>${LANG==="zh"?"单号 / 备注（可留空）":"Invoice / Note"}</label><input id="ap_note" placeholder="${LANG==="zh"?"发票号或备注":"optional"}"></div>
       <button class="btn block brand" onclick="savePayable()">${LANG==="zh"?"保存":"Save"}</button>`,
     emp:`<h3>+ ${LANG==="zh"?"新增员工":"New Employee"} <span class="x" onclick="closeM()">×</span></h3>
-      <div class="fr"><label>${LANG==="zh"?"姓名":"Name"}</label><input id="em_name" placeholder="陈志强 Tan CK"></div>
-      <div class="fg2"><div class="fr"><label>${LANG==="zh"?"职位":"Role"}</label><input id="em_role" placeholder="厨师 Cook"></div>
-      <div class="fr"><label>${LANG==="zh"?"身份":"Type"}</label><select id="em_local"><option value="1">${LANG==="zh"?"本地":"Local"}</option><option value="0">${LANG==="zh"?"外劳":"Foreign"}</option></select></div></div>
+      <div class="fg2"><div class="fr"><label>${LANG==="zh"?"员工号":"Emp No."}</label><input id="em_no" placeholder="${nextEmpNo()}"></div>
+      <div class="fr"><label>${LANG==="zh"?"姓名":"Name"}</label><input id="em_name" placeholder="陈志强 Tan CK"></div></div>
+      <div class="fg2"><div class="fr"><label>${LANG==="zh"?"职位":"Position"} <span onclick="openListMgr('positions')" style="cursor:pointer;color:var(--gold);font-weight:800;" title="${LANG==="zh"?'管理职位':'Manage'}">⚙</span></label><select id="em_role">${empPositions().map(p=>`<option value="${p.replace(/"/g,'&quot;')}">${p}</option>`).join('')}</select></div>
+      <div class="fr"><label>${LANG==="zh"?"国籍":"Nationality"} <span onclick="openListMgr('nationalities')" style="cursor:pointer;color:var(--gold);font-weight:800;" title="${LANG==="zh"?'管理国籍':'Manage'}">⚙</span></label><select id="em_nat">${empNats().map(p=>`<option value="${p.replace(/"/g,'&quot;')}">${p}</option>`).join('')}</select></div></div>
+      <div class="fg2"><div class="fr"><label>${LANG==="zh"?"身份证/护照":"IC/Passport"}</label><input id="em_ic"></div>
+      <div class="fr"><label>${LANG==="zh"?"电话":"Phone"}</label><input id="em_phone"></div></div>
+      <div class="fr"><label>${LANG==="zh"?"地址":"Address"}</label><input id="em_addr"></div>
+      <div class="fr"><label>${LANG==="zh"?"紧急联络人":"Emergency Contact"}</label><input id="em_emerg" placeholder="${LANG==="zh"?'姓名 + 电话':'Name + phone'}"></div>
+      <div class="fg2"><div class="fr"><label>${LANG==="zh"?"入职日期":"Joined"}</label><input id="em_joined" type="date"></div>
+      <div class="fr"><label>${LANG==="zh"?"婚姻":"Marital"}</label><select id="em_marital"><option value="single">${LANG==="zh"?"未婚":"Single"}</option><option value="married">${LANG==="zh"?"已婚":"Married"}</option><option value="divorced">${LANG==="zh"?"离婚":"Divorced"}</option></select></div></div>
       <div class="fg3"><div class="fr"><label>${LANG==="zh"?"底薪":"Basic"}</label><input id="em_basic" type="number"></div>
       <div class="fr"><label>${LANG==="zh"?"津贴":"Allow"}</label><input id="em_allow" type="number" value="0"></div>
-      <div class="fr"><label>OT</label><input id="em_ot" type="number" value="0"></div></div>
-      <div class="hint">${LANG==="zh"?"EPF/SOCSO/EIS 会依身份自动估算（本地有EPF，外劳计人头税）。":"Deductions auto-estimated."}</div>
+      <div class="fr"><label>${LANG==="zh"?"孩子数":"Children"}</label><input id="em_children" type="number" value="0" min="0"></div></div>
+      <div class="hint">${LANG==="zh"?"法定扣除(EPF/SOCSO/EIS/SL24J/PCB)在『薪资发放 Payroll』按马来西亚公式自动算。EPF 依国籍(马来西亚=本地)判定。":"Statutory deductions auto-calculated in Payroll Run."}</div>
       <button class="btn block brand" onclick="saveEmp()">${LANG==="zh"?"保存员工":"Save"}</button>`,
     opex:`<h3>✎ ${LANG==="zh"?"编辑运营开销":"Edit OpEx"} <span class="tag">${monthLabel2(costMonth)}</span> <span class="x" onclick="closeM()">×</span></h3>
       <div class="hint" style="margin-bottom:6px;">${LANG==="zh"?"仅修改本月（"+monthLabel2(costMonth)+"）的开销，其他月份不受影响。":"Edits this month only."}</div>
@@ -3041,7 +3049,9 @@ function prefill(type,id){
     setV('r_name',r.name);setV('r_price',r.price);if(r.ing&&r.ing[0]){setV('r_ing',r.ing[0].n);setV('r_q',r.ing[0].q);}
     setTitle(LANG==="zh"?"编辑配方":"Edit Recipe");}
   if(type==='emp'){const e=(d().staff||[]).find(x=>x.id===id);if(!e)return;
-    setV('em_name',e.name);setV('em_role',e.role);setV('em_local',e.local?"1":"0");setV('em_basic',e.basic);setV('em_allow',e.allowance);setV('em_ot',e.ot);
+    const injOpt=(selId,val)=>{const s=document.getElementById(selId);if(s&&val&&![...s.options].some(o=>o.value===val)){const o=document.createElement('option');o.value=val;o.textContent=val;s.appendChild(o);}};
+    injOpt('em_role',e.role);injOpt('em_nat',e.nationality||(e.local===false?'缅甸':'马来西亚'));
+    setV('em_no',e.empNo||'');setV('em_name',e.name);setV('em_role',e.role);setV('em_nat',e.nationality||(e.local===false?'缅甸':'马来西亚'));setV('em_ic',e.ic||'');setV('em_phone',e.phone||'');setV('em_addr',e.address||'');setV('em_emerg',e.emergency||'');setV('em_joined',e.joined||'');setV('em_marital',e.marital||(e.married?'married':'single'));setV('em_basic',e.basic);setV('em_allow',e.allowance);setV('em_children',+e.children||0);
     setTitle(LANG==="zh"?"编辑员工":"Edit Employee");}
   if(type==='vendor'){const v=d().vendors.find(x=>x.id===id);if(!v)return;
     setV('v_name',v.name);setV('v_terms',v.terms);setTitle(LANG==="zh"?"编辑供应商":"Edit Vendor");}
@@ -3165,14 +3175,18 @@ async function saveRecipe(){
   await save();closeM();render();
 }
 async function saveEmp(){
-  const n=document.getElementById('em_name').value.trim();if(!n)return alert(LANG==="zh"?"请输入姓名":"Name required");
-  const basic=+document.getElementById('em_basic').value||0;
-  const local=document.getElementById('em_local').value==="1";
-  const obj={name:n,role:document.getElementById('em_role').value||"—",basic,allowance:+document.getElementById('em_allow').value||0,ot:+document.getElementById('em_ot').value||0,
-    epf:local?Math.round(basic*0.11):0,socso:+(basic*0.005).toFixed(2),eis:local?+(basic*0.002).toFixed(2):0,levy:local?0:154,local};
+  const gV=id=>{const el=document.getElementById(id);return el?el.value:'';};
+  const n=gV('em_name').trim();if(!n)return alert(LANG==="zh"?"请输入姓名":"Name required");
+  const basic=+gV('em_basic')||0;
+  const nationality=gV('em_nat')||'马来西亚';const local=isLocalNat(nationality);
+  const marital=gV('em_marital')||'single';
+  const empNo=gV('em_no').trim()||nextEmpNo();
+  const obj={empNo,name:n,role:gV('em_role')||"—",nationality,local,ic:gV('em_ic').trim(),phone:gV('em_phone').trim(),address:gV('em_addr').trim(),emergency:gV('em_emerg').trim(),joined:gV('em_joined')||'',marital,married:marital==='married',children:+gV('em_children')||0,
+    basic,allowance:+gV('em_allow')||0,
+    epf:local?Math.round(basic*0.11):0,socso:+(basic*0.005).toFixed(2),eis:local?+(basic*0.002).toFixed(2):0,levy:0};
   if(!d().staff)d().staff=[];
-  if(_editId){const e=d().staff.find(x=>x.id===_editId);if(e){Object.assign(e,obj);auditLog("编辑员工",n,"","");}}
-  else{d().staff.push({id:Date.now(),...obj});auditLog("新增员工",n+" "+money(basic),"","");}
+  if(_editId){const e=d().staff.find(x=>x.id===_editId);if(e){if(e.ot==null)obj.ot=0;Object.assign(e,obj);auditLog("编辑员工",n,"","");}}
+  else{d().staff.push({id:Date.now(),ot:0,...obj});auditLog("新增员工",empNo+" "+n+" "+money(basic),"","");}
   autoSyncLabour(); // 薪资变动→自动联动当月运营开销的人工成本
   await save();closeM();render();
 }
@@ -3671,7 +3685,15 @@ function eisShares(wage){
   const top=Math.min(Math.ceil(w/100)*100,6000);const mid=top-50;
   return {er:round5(mid*0.002),ee:round5(mid*0.002)};
 }
-function sl24jAmt(wage,on){if(on===false)return 0;const w=payWageCap(wage);if(w<=0)return 0;return round5(w*(SL24J_RATE[payCfg().sl24j]||0.0075));}
+function sl24jAmt(wage,on,rate){if(on===false)return 0;const w=payWageCap(wage);if(w<=0)return 0;return round5(w*(rate||0.0075));}
+function payNum(n){return money(n).replace('RM ','');}
+function empPositions(){if(!d().positions)d().positions=["经理","主管","服务员","总厨","二厨","普通厨师","洗碗工"];return d().positions;}
+function empNats(){if(!d().nationalities)d().nationalities=["马来西亚","缅甸"];return d().nationalities;}
+function isLocalNat(nat){return (nat||'')==='马来西亚';} // 国籍→EPF本地判定
+function empIsLocal(e){return e.nationality?isLocalNat(e.nationality):(e.local!==false);}
+function yearsService(e){if(!e||!e.joined)return 0;const j=new Date(e.joined);if(isNaN(j.getTime()))return 0;const y=(new Date(TODAY)-j)/(365.25*864e5);return Math.max(0,y);}
+function sl24jPhaseOf(e){const y=yearsService(e);if(y<2)return {k:'f1',r:0.0075,label:'0.75%'};if(y<5)return {k:'f2',r:0.01,label:'1.0%'};return {k:'f3',r:0.0125,label:'1.25%'};}
+function nextEmpNo(){const nums=(d().staff||[]).map(e=>{const m=/(\d+)/.exec(e.empNo||'');return m?+m[1]:0;});const mx=nums.length?Math.max(...nums):0;return 'EMP'+String(mx+1).padStart(3,'0');}
 function taxResident(ci){ // YA2025 居民累进税
   if(ci<=5000)return 0;
   const b=[[5000,0],[20000,.01],[35000,.03],[50000,.06],[70000,.11],[100000,.19],[400000,.25],[600000,.26],[2000000,.28],[Infinity,.30]];
@@ -3688,9 +3710,10 @@ function computeRow(e){
   const otHours=+ov.otHours||0; const otMult=ov.otMult!=null?+ov.otMult:1.5;
   const otAmt=round5(otHours*otHourly(basic)*otMult);
   const gross=basic+allowance+incentive+otAmt;
-  const local=e.local!==false;
+  const local=empIsLocal(e);
   const epf=epfShares(gross,local),soc=socsoShares(gross),eis=eisShares(gross);
-  const sl=sl24jAmt(gross,ov.sl24jOn!==false);
+  const ph=sl24jPhaseOf(e);
+  const sl=sl24jAmt(gross,ov.sl24jOn!==false,ph.r);
   // PCB 估算（年度投影，等额月薪）
   const epfReliefAnnual=Math.min(epf.ee*12,4000);
   let ci=gross*12-9000-epfReliefAnnual-((e.married&&!e.spouseWorking)?4000:0)-(Math.max(0,+e.children||0)*2000);
@@ -3700,7 +3723,7 @@ function computeRow(e){
   const levy=+ov.levy||0; // 人头税占位（暂 0，不计入实发）
   const empDed=epf.ee+soc.ee+eis.ee+sl+pcb;
   const net=gross-empDed;
-  return {basic,allowance,incentive,otHours,otMult,otAmt,gross,epf,soc,eis,sl,pcb,pcbAuto,levy,empDed,net,erCost:gross+epf.er+soc.er+eis.er};
+  return {basic,allowance,incentive,otHours,otMult,otAmt,gross,epf,soc,eis,sl,slLabel:ph.label,pcb,pcbAuto,levy,empDed,net,erCost:gross+epf.er+soc.er+eis.er};
 }
 async function setPayOv(id,f,v){const r=payrunData();if(r.finalized)return;r.ov[id]=r.ov[id]||{};r.ov[id][f]=v;await save();render();}
 async function setPayPcb(id,v){const r=payrunData();if(r.finalized)return;r.ov[id]=r.ov[id]||{};if(String(v).trim()==='')delete r.ov[id].pcb;else r.ov[id].pcb=+v||0;await save();render();}
@@ -3708,6 +3731,46 @@ async function setEmpAttr(id,f,v){if(payrunData().finalized)return;const e=(d().
 async function setSl24jPhase(v){if(payrunData().finalized)return;payCfg().sl24j=v;await save();render();}
 async function finalizePayrun(){const r=payrunData();if(!confirm(LANG==="zh"?("确认「"+monthLabel2(payrunMonth)+"」薪资已核对无误？确认后锁定，可下载/打印。"):"Finalize payroll?"))return;r.finalized=true;auditLog("薪资核对完成",monthLabel2(payrunMonth),"","");await save();render();}
 async function unlockPayrun(){const r=payrunData();if(!confirm(LANG==="zh"?"解锁本月薪资以便修改？":"Unlock?"))return;r.finalized=false;await save();render();}
+let _paySaveT=null;
+function payDebouncedSave(){if(_paySaveT)clearTimeout(_paySaveT);_paySaveT=setTimeout(()=>{_paySaveT=null;save();},500);}
+function _setTxt(id,v){const el=document.getElementById(id);if(el)el.textContent=v;}
+function payReadRow(id){
+  const r=payrunData();if(r.finalized)return;r.ov[id]=r.ov[id]||{};const ov=r.ov[id];const g=x=>document.getElementById(x);let el;
+  if((el=g('pi-allow-'+id)))ov.allowance=el.value;
+  if((el=g('pi-inc-'+id)))ov.incentive=el.value;
+  if((el=g('pi-oth-'+id)))ov.otHours=el.value;
+  if((el=g('pi-otm-'+id)))ov.otMult=el.value;
+  if((el=g('pi-sl-'+id)))ov.sl24jOn=el.checked;
+  if((el=g('pi-pcb-'+id))){if(String(el.value).trim()==='')delete ov.pcb;else ov.pcb=+el.value||0;}
+  const e=(d().staff||[]).find(s=>s.id===id);
+  if(e){if((el=g('pi-marr-'+id)))e.married=el.checked;if((el=g('pi-child-'+id)))e.children=+el.value||0;}
+}
+function payLiveRecalc(id){
+  payReadRow(id);const e=(d().staff||[]).find(s=>s.id===id);if(!e)return;const c=computeRow(e);
+  _setTxt('po-ot-'+id,payNum(c.otAmt));_setTxt('po-gross-'+id,payNum(c.gross));
+  _setTxt('po-epf-'+id,payNum(c.epf.ee));_setTxt('po-soc-'+id,payNum(c.soc.ee));_setTxt('po-eis-'+id,payNum(c.eis.ee));
+  _setTxt('po-sl-'+id,payNum(c.sl));_setTxt('po-net-'+id,payNum(c.net));
+  const pl=document.getElementById('po-pcblbl-'+id);if(pl)pl.textContent=((payrunData().ov[id]||{}).pcb!=null?(LANG==="zh"?'手改':'edit'):(LANG==="zh"?'自动':'auto'));
+  payTotalsRecalc();payDebouncedSave();
+}
+function payTotalsRecalc(){
+  const rows=(d().staff||[]).map(e=>computeRow(e));
+  const T=rows.reduce((a,c)=>{a.gross+=c.gross;a.epfEe+=c.epf.ee;a.socEe+=c.soc.ee;a.eisEe+=c.eis.ee;a.sl+=c.sl;a.pcb+=c.pcb;a.net+=c.net;a.er+=c.erCost;return a;},{gross:0,epfEe:0,socEe:0,eisEe:0,sl:0,pcb:0,net:0,er:0});
+  _setTxt('pt-gross',payNum(T.gross));_setTxt('pt-epf',payNum(T.epfEe));_setTxt('pt-soc',payNum(T.socEe));_setTxt('pt-eis',payNum(T.eisEe));_setTxt('pt-sl',payNum(T.sl));_setTxt('pt-pcb',payNum(T.pcb));_setTxt('pt-net',payNum(T.net));
+  _setTxt('pt-netbig',money(T.net));_setTxt('pt-erbig',money(T.er));
+}
+/* 职位 / 国籍 列表管理（HR 可自行增删改） */
+function openListMgr(kind){
+  const zh=LANG==="zh";const isPos=kind==='positions';const list=isPos?empPositions():empNats();
+  const title=isPos?(zh?'管理职位':'Positions'):(zh?'管理国籍':'Nationalities');
+  openForm(`<h3>⚙ ${title} <span class="x" onclick="closeM()">×</span></h3>
+    <div>${list.map((x,i)=>`<div class="fr" style="display:flex;gap:6px;align-items:center;margin-bottom:6px;"><input value="${(x||'').replace(/"/g,'&quot;')}" onchange="lmRename('${kind}',${i},this.value)"><button class="ib" onclick="lmDel('${kind}',${i})">🗑️</button></div>`).join('')||`<div class="empty">${zh?'空':'Empty'}</div>`}</div>
+    <button class="btn ghost sm" onclick="lmAdd('${kind}')">+ ${zh?'新增':'Add'}</button>
+    <div class="hint" style="margin-top:6px;">${zh?'改完关闭，重开员工表单即见更新。':'Reopen staff form to see updates.'}</div>`);
+}
+async function lmAdd(kind){const zh=LANG==="zh";const v=(prompt(zh?'新增名称：':'New:')||'').trim();if(!v)return;const list=kind==='positions'?empPositions():empNats();if(!list.includes(v))list.push(v);await save();openListMgr(kind);}
+async function lmRename(kind,i,v){v=(v||'').trim();const list=kind==='positions'?empPositions():empNats();if(v)list[i]=v;await save();}
+async function lmDel(kind,i){const zh=LANG==="zh";if(!confirm(zh?'删除此项？':'Delete?'))return;const list=kind==='positions'?empPositions():empNats();list.splice(i,1);await save();openListMgr(kind);}
 function payHead(title){return `<div class="noprint" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap;"><h3 style="margin:0;">${title}</h3><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;"><button class="btn brand sm" onclick="printInvoice()">🖨️ ${LANG==="zh"?'下载 / 打印':'Download / Print'}</button><button class="btn ghost sm" onclick="closeM()" title="${LANG==="zh"?'关闭':'Close'}" style="font-size:17px;line-height:1;padding:5px 12px;font-weight:800;">✕</button></div></div>`;}
 function payrollSheetHTML(){
   const zh=LANG==="zh";const rows=(d().staff||[]).map(e=>({e,c:computeRow(e)}));
@@ -3718,7 +3781,7 @@ function payrollSheetHTML(){
   <div style="overflow-x:auto;"><table style="border-collapse:collapse;font-size:12px;width:100%;">
   <thead><tr style="background:#EDF2F9;">${['员工 Staff','底薪','津贴','奖励','OT','应发Gross','EPF员','SOCSO员','EIS员','SL24J','PCB','实发Net'].map(h=>`<th style="padding:5px 7px;border:1px solid #ccc;">${h}</th>`).join('')}</tr></thead>
   <tbody>${body}<tr style="background:#F2F4F7;font-weight:800;"><td style="padding:4px 7px;border:1px solid #ccc;">${zh?'合计':'Total'}</td>${[t.basic,t.allowance,t.incentive,t.otAmt,t.gross,t.epfEe,t.socEe,t.eisEe,t.sl,t.pcb,t.net].map(v=>`<td style="text-align:right;padding:4px 7px;border:1px solid #ccc;">${money(v)}</td>`).join('')}</tr></tbody></table></div>
-  <div class="mini" style="margin-top:8px;opacity:.75;">${zh?'EPF/SOCSO/EIS 按官方附表；SL24J 员工承担('+({f1:'0.75%',f2:'1.0%',f3:'1.25%'}[payCfg().sl24j])+')；PCB 为估算，正式以 LHDN e-PCB 为准。':'Statutory per official schedules; PCB is an estimate.'}</div></div>`;
+  <div class="mini" style="margin-top:8px;opacity:.75;">${zh?'EPF/SOCSO/EIS 按官方附表；SL24J 员工承担(按工龄 0.75/1.0/1.25%)；PCB 为估算，正式以 LHDN e-PCB 为准。':'Statutory per official schedules; PCB is an estimate.'}</div></div>`;
 }
 function t2(k){return t(k);} // 别名
 function payslipHTML(e,pageBreak){
@@ -3729,7 +3792,7 @@ function payslipHTML(e,pageBreak){
       <div><div style="font-weight:800;font-size:16px;">${t2('appTitle')}</div><div class="mini">${nm(outletObj())} · ${zh?'薪资单 Payslip':'Payslip'}</div></div>
       <div style="text-align:right;"><div style="font-weight:800;">${monthLabel2(payrunMonth)}</div></div>
     </div>
-    <div style="margin:10px 0 8px;font-weight:800;">${e.name} <span class="mini" style="font-weight:600;">· ${e.role} · ${e.local!==false?(zh?'本地':'Local'):(zh?'外劳':'Foreign')}</span></div>
+    <div style="margin:10px 0 8px;font-weight:800;">${e.name} <span class="mini" style="font-weight:600;">· ${e.empNo?e.empNo+' · ':''}${e.role} · ${e.nationality||(e.local!==false?(zh?'本地':'Local'):(zh?'外劳':'Foreign'))}</span></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
       <div><div style="font-weight:800;margin-bottom:4px;">${zh?'收入 Earnings':'Earnings'}</div>
         ${R(zh?'底薪 Basic':'Basic',c.basic)}${R(zh?'津贴 Allowance':'Allowance',c.allowance)}${R(zh?'奖励 Incentive':'Incentive',c.incentive)}${R((zh?'加班 OT':'OT')+' ('+num(c.otHours,1)+'h×'+c.otMult+')',c.otAmt)}
@@ -3776,38 +3839,37 @@ function pgPayrun(){
   const dis=(!w||fin)?'disabled':'';
   const ci='style="width:66px;padding:6px 5px;border:1px solid var(--line);border-radius:6px;text-align:right;font-size:12.5px;"';
   const monthSeg=`<div class="seg" style="flex-wrap:wrap;margin-bottom:8px;">${months.map(m=>`<button class="${m===payrunMonth?'active':''}" onclick="setPayrunMonth('${m}')">${monthLabel2(m)}${(d().payrollRuns[m]&&d().payrollRuns[m].finalized)?' ✅':''}</button>`).join('')}</div>`;
-  const num2=(n)=>money(n).replace('RM ','');
-  const body=rows.map(({e,c})=>{const ov=run.ov[e.id]||{};const pcbShown=ov.pcb!=null?ov.pcb:c.pcbAuto;return `<tr>
-    <td class="pstick" style="text-align:left;font-weight:700;min-width:120px;">${e.name}<br><span class="mini">${e.role}</span></td>
+  const num2=payNum;
+  const NI='style="width:66px;padding:6px 5px;border:1px solid var(--line);border-radius:6px;text-align:right;font-size:12.5px;"';
+  const body=rows.map(({e,c})=>{const ov=run.ov[e.id]||{};const pcbShown=ov.pcb!=null?ov.pcb:c.pcbAuto;const RC=`payLiveRecalc(${e.id})`;return `<tr>
+    <td class="pstick" style="text-align:left;font-weight:700;min-width:130px;">${e.name}<br><span class="mini">${e.empNo?e.empNo+' · ':''}${e.role||''}</span></td>
     <td style="text-align:right;">${num2(c.basic)}</td>
-    <td><input ${ci} type="number" step="0.01" ${dis} value="${c.allowance}" onchange="setPayOv(${e.id},'allowance',this.value)"></td>
-    <td><input ${ci} type="number" step="0.01" ${dis} value="${c.incentive}" onchange="setPayOv(${e.id},'incentive',this.value)"></td>
-    <td><input style="width:52px;padding:6px 4px;border:1px solid var(--line);border-radius:6px;text-align:right;font-size:12.5px;" type="number" step="0.5" ${dis} value="${c.otHours}" onchange="setPayOv(${e.id},'otHours',this.value)"></td>
-    <td><select ${dis} onchange="setPayOv(${e.id},'otMult',this.value)" style="padding:6px 4px;border:1px solid var(--line);border-radius:6px;font-size:12.5px;">${[1.0,1.5,2.0,2.5,3.0].map(x=>`<option value="${x}" ${c.otMult==x?'selected':''}>${x.toFixed(1)}×</option>`).join('')}</select></td>
-    <td style="text-align:right;" class="mini">${num2(c.otAmt)}</td>
-    <td style="text-align:right;font-weight:700;">${num2(c.gross)}</td>
-    <td style="text-align:right;color:#B42318;">${num2(c.epf.ee)}</td>
-    <td style="text-align:right;color:#B42318;">${num2(c.soc.ee)}</td>
-    <td style="text-align:right;color:#B42318;">${num2(c.eis.ee)}</td>
-    <td style="text-align:center;"><input type="checkbox" ${dis} ${ov.sl24jOn!==false?'checked':''} onchange="setPayOv(${e.id},'sl24jOn',this.checked)"><br><span class="mini" style="color:#B42318;">${num2(c.sl)}</span></td>
-    <td style="text-align:center;"><input type="checkbox" ${dis} ${e.married?'checked':''} onchange="setEmpAttr(${e.id},'married',this.checked)"></td>
-    <td><input style="width:42px;padding:6px 4px;border:1px solid var(--line);border-radius:6px;text-align:right;font-size:12.5px;" type="number" step="1" min="0" ${dis} value="${+e.children||0}" onchange="setEmpAttr(${e.id},'children',+this.value||0)"></td>
-    <td><input ${ci} type="number" step="0.01" ${dis} value="${pcbShown}" title="${zh?'留空=自动估算':'blank=auto'}" onchange="setPayPcb(${e.id},this.value)"><br><span class="mini">${ov.pcb!=null?'手改':'自动'}</span></td>
+    <td><input id="pi-allow-${e.id}" ${NI} type="number" step="0.01" ${dis} value="${c.allowance}" oninput="${RC}"></td>
+    <td><input id="pi-inc-${e.id}" ${NI} type="number" step="0.01" ${dis} value="${c.incentive}" oninput="${RC}"></td>
+    <td><input id="pi-oth-${e.id}" style="width:52px;padding:6px 4px;border:1px solid var(--line);border-radius:6px;text-align:right;font-size:12.5px;" type="number" step="0.5" ${dis} value="${c.otHours}" oninput="${RC}"></td>
+    <td><select id="pi-otm-${e.id}" ${dis} onchange="${RC}" style="padding:6px 4px;border:1px solid var(--line);border-radius:6px;font-size:12.5px;">${[1.0,1.5,2.0,2.5,3.0].map(x=>`<option value="${x}" ${c.otMult==x?'selected':''}>${x.toFixed(1)}×</option>`).join('')}</select></td>
+    <td style="text-align:right;" class="mini"><span id="po-ot-${e.id}">${num2(c.otAmt)}</span></td>
+    <td style="text-align:right;font-weight:700;"><span id="po-gross-${e.id}">${num2(c.gross)}</span></td>
+    <td style="text-align:right;color:#B42318;"><span id="po-epf-${e.id}">${num2(c.epf.ee)}</span></td>
+    <td style="text-align:right;color:#B42318;"><span id="po-soc-${e.id}">${num2(c.soc.ee)}</span></td>
+    <td style="text-align:right;color:#B42318;"><span id="po-eis-${e.id}">${num2(c.eis.ee)}</span></td>
+    <td style="text-align:center;"><input type="checkbox" id="pi-sl-${e.id}" ${dis} ${ov.sl24jOn!==false?'checked':''} onchange="${RC}"><br><span class="mini" style="color:#B42318;"><span id="po-sl-${e.id}">${num2(c.sl)}</span></span><br><span class="mini" style="opacity:.7;">${c.slLabel}</span></td>
+    <td style="text-align:center;"><input type="checkbox" id="pi-marr-${e.id}" ${dis} ${e.married?'checked':''} onchange="${RC}"></td>
+    <td><input id="pi-child-${e.id}" style="width:42px;padding:6px 4px;border:1px solid var(--line);border-radius:6px;text-align:right;font-size:12.5px;" type="number" step="1" min="0" ${dis} value="${+e.children||0}" oninput="${RC}"></td>
+    <td><input id="pi-pcb-${e.id}" ${NI} type="number" step="0.01" ${dis} value="${pcbShown}" placeholder="auto" title="${zh?'留空=自动估算':'blank=auto'}" oninput="${RC}"><br><span class="mini" id="po-pcblbl-${e.id}">${ov.pcb!=null?(zh?'手改':'edit'):(zh?'自动':'auto')}</span></td>
     <td style="text-align:right;" class="mini">${num2(c.levy)}</td>
-    <td class="pstickR" style="text-align:right;font-weight:800;">${num2(c.net)}</td>
+    <td class="pstickR" style="text-align:right;font-weight:800;"><span id="po-net-${e.id}">${num2(c.net)}</span></td>
   </tr>`;}).join('')||`<tr><td colspan="18" class="empty">${zh?'暂无员工（请先到人事档案添加）':'No staff'}</td></tr>`;
   const th=(t)=>`<th style="padding:5px 6px;white-space:nowrap;">${t}</th>`;
   const head=`<tr>${th(zh?'员工':'Staff')}${th(zh?'底薪':'Basic')}${th(zh?'津贴':'Allow')}${th(zh?'奖励':'Incent')}${th('OT时')}${th('OT倍')}${th('OT额')}${th(zh?'应发':'Gross')}${th('EPF员')}${th('SOCSO员')}${th('EIS员')}${th('SL24J')}${th(zh?'已婚':'Marr')}${th(zh?'孩':'Child')}${th('PCB')}${th(zh?'人头税':'Levy')}${th(zh?'实发':'Net')}</tr>`;
   return `<div class="fb"><h2 class="h" style="margin:0;">🧮 ${zh?'薪资发放 Payroll':'Payroll Run'} <span class="tag">${monthLabel2(payrunMonth)}${fin?' 🔒':''}</span></h2>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-      <span class="mini">SL24J</span><select ${dis} onchange="setSl24jPhase(this.value)" style="padding:6px 8px;border:1.5px solid var(--line);border-radius:8px;font-size:12.5px;font-weight:700;"><option value="f1" ${cfg.sl24j==='f1'?'selected':''}>Fasa1 0.75%</option><option value="f2" ${cfg.sl24j==='f2'?'selected':''}>Fasa2 1.0%</option><option value="f3" ${cfg.sl24j==='f3'?'selected':''}>Fasa3 1.25%</option></select>
-    </div></div>
+    <span class="mini" style="opacity:.7;">SL24J ${zh?'按工龄自动 (0.75→1.0→1.25%)':'auto by tenure'}</span></div>
   ${monthSeg}
-  <div class="hint">${zh?'薪资从『人事档案』自动带入底薪；津贴/奖励/OT时数可改。OT = 时数 × (底薪÷26÷8) × 倍数。EPF/SOCSO/EIS 按官方附表；SL24J 员工承担；PCB 为估算(可手改，留空=自动)，正式以 LHDN e-PCB 为准。人头税暂为 0。':'Basic auto from HR; edit allowance/incentive/OT. Statutory per official schedules; PCB estimate.'}</div>
+  <div class="hint">${zh?'底薪从『员工档案』自动带入；津贴/奖励/OT时数可改，一填数字即时结算。OT = 时数 × (底薪÷26÷8) × 倍数。EPF/SOCSO/EIS 按官方附表；SL24J 员工承担(按工龄自动)；PCB 为估算(可手改，留空=自动)，正式以 LHDN e-PCB 为准。人头税暂为 0。':'Basic auto from staff profile; edits settle instantly. Statutory per official schedules; PCB estimate.'}</div>
   <div class="gwrap" style="max-height:66vh;"><table class="gtbl ptbl" style="font-size:12.5px;"><thead>${head}</thead><tbody>${body}
-    <tr class="gsum" style="font-weight:800;"><td class="pstick">${zh?'合计':'Total'}</td><td></td><td></td><td></td><td></td><td></td><td></td><td style="text-align:right;">${num2(T.gross)}</td><td style="text-align:right;">${num2(T.epfEe)}</td><td style="text-align:right;">${num2(T.socEe)}</td><td style="text-align:right;">${num2(T.eisEe)}</td><td style="text-align:right;">${num2(T.sl)}</td><td></td><td></td><td style="text-align:right;">${num2(T.pcb)}</td><td></td><td class="pstickR" style="text-align:right;">${num2(T.net)}</td></tr>
+    <tr class="gsum" style="font-weight:800;"><td class="pstick">${zh?'合计':'Total'}</td><td></td><td></td><td></td><td></td><td></td><td></td><td style="text-align:right;"><span id="pt-gross">${num2(T.gross)}</span></td><td style="text-align:right;"><span id="pt-epf">${num2(T.epfEe)}</span></td><td style="text-align:right;"><span id="pt-soc">${num2(T.socEe)}</span></td><td style="text-align:right;"><span id="pt-eis">${num2(T.eisEe)}</span></td><td style="text-align:right;"><span id="pt-sl">${num2(T.sl)}</span></td><td></td><td></td><td style="text-align:right;"><span id="pt-pcb">${num2(T.pcb)}</span></td><td></td><td class="pstickR" style="text-align:right;"><span id="pt-net">${num2(T.net)}</span></td></tr>
   </tbody></table></div>
-  <div class="pl" style="margin-top:10px;"><div class="row"><span>${zh?'员工实发总额 Net':'Total Net'}</span><b>${money(T.net)}</b></div><div class="row"><span>${zh?'雇主总成本 (含EPF/SOCSO/EIS雇主)':'Employer Cost'}</span><b>${money(T.er)}</b></div></div>
+  <div class="pl" style="margin-top:10px;"><div class="row"><span>${zh?'员工实发总额 Net':'Total Net'}</span><b id="pt-netbig">${money(T.net)}</b></div><div class="row"><span>${zh?'雇主总成本 (含EPF/SOCSO/EIS雇主)':'Employer Cost'}</span><b id="pt-erbig">${money(T.er)}</b></div></div>
   ${w?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
     ${fin?`<button class="btn ghost" onclick="unlockPayrun()">🔓 ${zh?'解锁修改':'Unlock'}</button>
       <button class="btn brand" onclick="openPayrollPrint()">🖨️ ${zh?'下载/打印 Payroll':'Download/Print Payroll'}</button>
@@ -3826,6 +3888,7 @@ function render(){
   const banner=isAgg()?`<div class="al al-b" style="margin-bottom:10px;"><div class="t">📊 ${LANG==="zh"?"全部分店总和视图（只读）":"All-Branches Aggregate (read-only)"}</div>${LANG==="zh"?"这是 11 间分店数据的合计，仅供总览；要录入或修改请切换到个别分店。":"Totals of all branches. Switch to a branch to edit."}</div>`:'';
   const preview=isPreviewing()?`<div class="al al-a" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><div><div class="t">👁 ${LANG==="zh"?"岗位预览模式":"Role Preview"}</div>${LANG==="zh"?`你正在以「${ROLES[curRole].name}」身份查看界面（真实身份：${curUser.name} · 老板/管理员）。`:`Previewing as ${ROLES[curRole].en}.`}</div><button class="btn ghost sm" onclick="exitPreview()">↩︎ ${LANG==="zh"?"退出预览":"Exit"}</button></div>`:'';
   document.getElementById('pageHost').innerHTML=`<div class="page active">${banner}${preview}${(_pages[curPage]||pgDash)()}</div>`;
+  const mn=document.querySelector('.main');if(mn)mn.classList.toggle('wide',['payrun','monthend'].includes(curPage)); // 宽表页用满宽
 }
 
 /* ================= 登录 / 身份验证 =================
