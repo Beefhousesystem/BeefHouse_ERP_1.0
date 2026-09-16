@@ -68,6 +68,7 @@
 - 薪资发放(payrun)**仅老板/HR(salaryView:"full")可看与编辑**(pageAllowed 加 canSeeSalary)；表格含**雇主承担列**(EPF雇/SOCSO雇/EIS雇)。
 - **运营开销的人工成本 = Payroll 的雇主总成本**：`payrollLabour()` 已改用同一套法定引擎(computeRow)计算(salaries=底薪+津贴+奖励、ot=加班额、epf/socso/eis=雇主承担、levy)，两处数字一致；改动员工后需点『🔗同步人事薪资』或自动联动刷新。
 - 员工档案(pgHR/emp表单)字段：员工号(EMP001起,自动)、姓名、职位(下拉,`d().positions`可增删改)、国籍(下拉,`d().nationalities`默认马来西亚/缅甸,可增删改)、IC/护照、电话、地址、紧急联络人、入职日期、婚姻(未婚/已婚/离婚)、孩子数、底薪、津贴。国籍→EPF本地判定(`empIsLocal`)。
+- 作业中心六项均**按月份分开**：进货单/月末盘点(网格月份tab)、报废损耗/招待/调拨(flatMonthTabs 按月筛选)；**退货/补货(grn)已重做**成「供应商→选月份→逐笔表单登记(退货/补货)」风格(pgReturns/formReturn，数据仍存 d().grn，settle=退货|补货)，不再用每日网格。订货单是实时模板(其订单在订单发票按月归档)。
 - 复制完，明记那边**可继续自行修改**（它有独立的一份代码+数据）。
 
 ### 换账号做同样的事——安全吗？
