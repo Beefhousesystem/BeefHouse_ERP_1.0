@@ -27,7 +27,7 @@
 ## 🏪 门店结构
 
 - **中央厨房**(Central Kitchen)
-- **分店 1**(Branch 1)
+- **Setapak店**(Setapak Branch)
 
 > 如需增减门店,修改 `index.html` 中的 `OUTLETS` 列表即可。
 

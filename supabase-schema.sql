@@ -2,6 +2,7 @@
 -- 牛室炙烤牛排 · Supabase 建表脚本
 -- 用法：Supabase 控制台 → SQL Editor → New query → 粘贴全部 → Run
 -- 已经跑过第 1 版的，只需再跑「第 2 部分」即可（重复运行安全）。
+-- 2026-09 更新：erp_users 写入策略收紧为「仅老板/区域副经理」，重新跑一次本脚本即可生效。
 -- ============================================================
 
 -- ========== 第 1 部分：业务数据表 erp_store ==========
@@ -13,6 +14,10 @@ create table if not exists public.erp_store (
 alter table public.erp_store enable row level security;
 
 -- 收紧：仅「已登录」用户可读写业务数据（未登录看不到任何东西）
+-- ⚠️ 已知限制：erp_store 是「整店一行 jsonb」的结构（各模块含薪资都在同一份 value 里），
+-- RLS 目前只能按「登录与否」把关，做不到「按角色/分店」的行级隔离——
+-- 分角色的数据可见性（如员工看不到薪资）目前完全靠 App 前端判断。若要在数据库层也拦住，
+-- 需要把薪资等敏感数据拆到独立的表/字段再配 RLS，是较大改动，先记录在此，未来需要再做。
 drop policy if exists "erp_store anon full access" on public.erp_store;      -- 移除旧的匿名策略
 drop policy if exists "erp_store authed full access" on public.erp_store;
 create policy "erp_store authed full access"
@@ -32,17 +37,35 @@ create table if not exists public.erp_users (
 );
 alter table public.erp_users enable row level security;
 
--- 已登录用户可读写白名单（应用层已限制只有 老板/区域副经理 能看到管理面板）。
--- 想更严格时：把写入策略换成「仅 owner/area 可改」——可另外加一个基于 email→role 的
--- SQL 函数做判断，需要的话让我帮你加。
+-- 已登录用户可读白名单（读取角色不敏感，App 要靠它判断当前人是谁）。
 drop policy if exists "erp_users authed read" on public.erp_users;
-drop policy if exists "erp_users authed write" on public.erp_users;
 create policy "erp_users authed read"
   on public.erp_users for select
   to authenticated using (true);
-create policy "erp_users authed write"
+
+-- 写入收紧：只有「老板/区域副经理」才能改白名单（新增/停用员工、改角色）。
+-- 例外：首次使用、白名单还是空表时放行——让第一个注册的人能被设为老板（配合 App 的自动引导）。
+create or replace function public.erp_is_admin()
+returns boolean
+language sql
+security definer
+stable
+as $$
+  select exists (
+    select 1 from public.erp_users u
+    where u.email = auth.jwt()->>'email'
+      and u.role in ('owner','area')
+      and u.active
+  );
+$$;
+
+drop policy if exists "erp_users authed write" on public.erp_users;         -- 移除旧的「任何登录用户皆可写」策略
+drop policy if exists "erp_users admin or bootstrap write" on public.erp_users;
+create policy "erp_users admin or bootstrap write"
   on public.erp_users for all
-  to authenticated using (true) with check (true);
+  to authenticated
+  using ( public.erp_is_admin() or not exists (select 1 from public.erp_users) )
+  with check ( public.erp_is_admin() or not exists (select 1 from public.erp_users) );
 
 -- ============================================================
 -- 首次使用：
