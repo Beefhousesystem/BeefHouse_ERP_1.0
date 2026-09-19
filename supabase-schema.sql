@@ -98,10 +98,17 @@ create policy "erp_users admin or bootstrap write"
 -- 例外 2：yxchong3@gmail.com（老板本人）永远免邀请码，直接设为『老板』。
 --
 -- 邀请码对照表（如需改邀请码，改下面 case 里的字符串即可）：
---   tcymgmt888 → area     (区域副经理)
---   bfmgr888   → manager  (店面经理)
---   chef888    → headchef (厨师长)
---   bfstaff888 → staff    (员工)
+--   tcymgmt888   → area      (区域副经理，全分店)
+--   stpbhmgr888  → manager   (Setapak店 店面经理)
+--   stpbhchef888 → headchef  (Setapak店 厨师长)
+--   stpbhstaff888→ staff     (Setapak店 员工)
+--   tcymgr888    → ckmanager (中央经理，锁定中央厨房分店)
+--   tcystaff888  → ckstaff   (中央员工，锁定中央厨房分店，不含利润大盘)
+-- 2026-09-19 更新：店面/厨师长/员工的邀请码从通用的 bfmgr888/chef888/bfstaff888
+-- 改成带 Setapak 店名前缀的 stpbh*888——因为以后可能会开更多分店，每间分店
+-- 要用各自专属的邀请码，不能再共用一组（否则新店员工用旧码注册，会被分到
+-- Setapak 店去）。以后再开新分店，照这个命名风格(店名缩写+mgr/chef/staff+888)
+-- 加新的邀请码分支即可，同时也要处理 outlet 该给哪个分店 id（见下面 v_outlet）。
 --
 -- ⚠️ 2026-09-19 发现：牛室这个正式项目里，`auth.users` 上早就绑了一个触发器
 -- `on_auth_user_created`（对应函数 `handle_new_user`），跟这里写的完全是两套
@@ -119,6 +126,7 @@ as $$
 declare
   v_code text := coalesce(new.raw_user_meta_data->>'invite_code','');
   v_role text;
+  v_outlet text := 'b1'; -- 默认分店：Setapak店；中央厨房角色下面另外覆盖成 'ck'
   v_email text := lower(new.email);
   v_code_exempt_emails text[] := array['yxchong3@gmail.com']; -- 免邀请码白名单（如老板本人账号）
 begin
@@ -126,10 +134,12 @@ begin
     v_role := 'owner';
   else
     v_role := case v_code
-      when 'tcymgmt888' then 'area'
-      when 'bfmgr888'   then 'manager'
-      when 'chef888'    then 'headchef'
-      when 'bfstaff888' then 'staff'
+      when 'tcymgmt888'    then 'area'
+      when 'stpbhmgr888'   then 'manager'
+      when 'stpbhchef888'  then 'headchef'
+      when 'stpbhstaff888' then 'staff'
+      when 'tcymgr888'     then 'ckmanager'
+      when 'tcystaff888'   then 'ckstaff'
       else null
     end;
 
@@ -142,9 +152,13 @@ begin
     end if;
   end if;
 
+  if v_role in ('ckmanager','ckstaff') then
+    v_outlet := 'ck'; -- 中央厨房角色锁定在中央厨房这个分店
+  end if;
+
   insert into public.erp_users (email, name, role, outlet, active, created_at)
-  values (lower(new.email), split_part(new.email,'@',1), v_role, 'b1', true, now())
-  on conflict (email) do update set role = excluded.role, active = true;
+  values (lower(new.email), split_part(new.email,'@',1), v_role, v_outlet, true, now())
+  on conflict (email) do update set role = excluded.role, outlet = excluded.outlet, active = true;
 
   return new;
 end;

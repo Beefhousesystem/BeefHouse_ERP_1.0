@@ -582,6 +582,12 @@ const ROLES={
   staff:{name:"员工 Staff",en:"Staff",
     can:["attend","leave","payroll"],
     allBranch:false, hrScope:"self", salaryView:"self", canRunPayroll:false, approveLeave:false}, // 只有人事自助：打卡、请假、查看自己薪资/Payslip
+  ckmanager:{name:"中央经理 Central Manager",en:"Central Manager",
+    can:["dash","proc","waste","ck","inv","stock","ap","opex","report","hr","attend","schedule","leave","payroll"],
+    allBranch:false, hrScope:"branch", salaryView:"branch", canRunPayroll:false, approveLeave:true}, // 锁定在「中央厨房」这个分店(白名单里把 outlet 设为 ck)；采购进销含订货单/进货单/退货补货/报废损耗，但不含跨店调拨；能看中央厨房员工的薪资明细，不能编辑
+  ckstaff:{name:"中央员工 Central Staff",en:"Central Staff",
+    can:["transfer","ck","inv","stock","hr","attend","schedule","leave","payroll"],
+    allBranch:false, hrScope:"self", salaryView:"self", canRunPayroll:false, approveLeave:false}, // 锁定在「中央厨房」；采购进销只开跨店调拨(不含订货/进货/退货/报废)，不看利润大盘，只能看自己薪资
 };
 // 可编辑权限的角色（老板、人事经理、区域副经理）
 function canEditPerms(){return ROLES[curRole] && ROLES[curRole].canEditPerms===true;}
@@ -620,7 +626,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0919d";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0919e";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";

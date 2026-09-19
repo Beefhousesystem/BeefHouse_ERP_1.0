@@ -72,14 +72,18 @@
 - 复制完，明记那边**可继续自行修改**（它有独立的一份代码+数据）。
 
 ## 注册邀请码（牛室，2026-09）
-员工/管理层首次注册账号时，在注册表单「邀请码 / 口令」栏填入对应邀请码，由 Supabase 触发器识别并赋予角色（`role`：owner / area / manager / headchef / staff）：
+员工/管理层首次注册账号时，在注册表单「邀请码 / 口令」栏填入对应邀请码，由 Supabase 触发器识别并赋予角色和分店：
 
-| 角色 | 邀请码 |
-|---|---|
-| 区域副经理 | `tcymgmt888` |
-| 店面经理 | `bfmgr888` |
-| 厨师长 | `chef888` |
-| 员工 | `bfstaff888` |
+| 角色 | 邀请码 | 分店 |
+|---|---|---|
+| 区域副经理 `area` | `tcymgmt888` | 全分店 |
+| Setapak店 店面经理 `manager` | `stpbhmgr888` | Setapak店 (b1) |
+| Setapak店 厨师长 `headchef` | `stpbhchef888` | Setapak店 (b1) |
+| Setapak店 员工 `staff` | `stpbhstaff888` | Setapak店 (b1) |
+| 中央经理 `ckmanager` | `tcymgr888` | 中央厨房 (ck) |
+| 中央员工 `ckstaff` | `tcystaff888` | 中央厨房 (ck) |
+
+⚠️ **2026-09-19 二次更新**：店面/厨师长/员工的邀请码从原本通用的 `bfmgr888`/`chef888`/`bfstaff888` 改成带 **Setapak 店名前缀**的 `stpbh*888`——因为以后可能会开更多分店，以后每开一间新分店都要给它专属的一组邀请码（不能沿用 Setapak 这组，否则新店员工会被分到 Setapak 去）。新增两个「中央厨房」专属角色 `ckmanager`/`ckstaff`（锁定在 `outlet='ck'`，见下方权限说明）。
 
 ✅ **2026-09-19 更新**：邀请码判定逻辑已写进 `supabase-schema.sql`（第 3 部分，函数名 `handle_new_user`，绑在 `on_auth_user_created` 触发器上），需要去 Supabase SQL Editor 手动跑一遍脚本才会生效。前端 (`index.html` 的 `doAuthSignup`) 也加了「必填」校验，不填不给交。
 🐛 **踩过的坑（关键）**：牛室这个正式 Supabase 项目里，**`auth.users` 早就绑了一个同名触发器 `on_auth_user_created`（函数 `handle_new_user`）**，是这次对话之前就已经存在的旧逻辑——它认的邀请码是 `bmr888` / `BHMGR888` / `BHSTAFF123` 这种跟本备忘完全对不上的词，而且**任何邀请码填错/填了不认识的词，它都默默给 staff，不会拒绝**。一开始我们另外新建了一个名字不同的触发器 `on_auth_user_created_invite`，结果实际生效的还是旧的那个（新的建立指令当时没跑到/没生效），导致填对邀请码也还是被分配成 staff。**最终修法：直接把 `handle_new_user` 这个既有函数的内容覆盖成正确逻辑，不再另外建新触发器**——如果你之后又发现邀请码不生效，第一件事就是去查 `auth.users` 上实际绑的是哪个触发器、对应哪个函数，不要假设一定是本文件里这份在跑：
@@ -117,6 +121,13 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 - `canW('payroll')`：额外加了 `&&canRunPayroll()`，堵住"虽然进不去 Payrun 编辑页，但还能从 Payroll 查看页的行内编辑/删除按钮改数据"这个漏洞。
 - `pgPayroll()` 的 `salaryScope()` 四级：`full`(老板/人事经理，全分店个人明细) / `branch`(店长，本店个人明细) / `total`(区域副经理，全部+各店小计) / `self`(厨师长/员工，只看自己)。
 - 全文件里原本一批写死的 `['owner','area']`（订单确认/央厨订货/应付账款重开等跟薪资无关的管理权限判断）**已经批量加上 `hrmanager`**，确保"人事经理权限和老板一样"这句话在薪资以外的模块也成立。
+
+## 新增「中央经理/中央员工」两个角色，锁定在中央厨房分店（2026-09-19）
+业主参考明记那边已经有的「中央经理/中央员工」角色截图，要求牛室也加两个对应角色，权限只限中央厨房(`outlet:'ck'`)：
+- **中央经理 `ckmanager`**（邀请码 `tcymgr888`）：`can` = `["dash","proc","waste","ck","inv","stock","ap","opex","report","hr","attend","schedule","leave","payroll"]`。采购进销页里含订货单/进货单/退货补货/报废损耗（`proc`+`waste`），**不含跨店调拨**（没给 `transfer`）。`allBranch:false`，`hrScope`/`salaryView` 都是 `"branch"`（能看中央厨房员工的薪资明细，不能编辑），`approveLeave:true`。
+- **中央员工 `ckstaff`**（邀请码 `tcystaff888`）：`can` = `["transfer","ck","inv","stock","hr","attend","schedule","leave","payroll"]`。**没有 `dash`（看不到利润大盘）**，采购进销页**只有跨店调拨**这一张卡（因为只给了 `transfer`，没给 `proc`/`waste`）。`hrScope`/`salaryView` 都是 `"self"`，只能看自己的薪资/考勤。
+- 两个角色的 `outlet` 由后台触发器自动锁定成 `'ck'`（`handle_new_user()` 里 `v_role in ('ckmanager','ckstaff')` 时把 `v_outlet` 设成 `'ck'`），业主在「设置→白名单」手动加人时也要记得把「所属分店」选成「中央厨房」。
+- 这两个角色权限清单是照着业主截图**近似还原**明记那边"中央经理/中央员工"角色的样子（明记是他们自己独立的一套代码，我没有直接权限去看，只能靠业主给的截图和文字描述反推）——如果实际用起来发现某个模块该给没给、或不该给却给了，随时可以让我再调整 `ckmanager`/`ckstaff` 的 `can` 数组。
 
 ⚠️ **复制给明记时**：这一整套角色/权限设计（`ROLES` 常量、`erp_is_admin`/`erp_can_read_key`/`erp_can_write_key` 里的角色白名单）是牛室按业主这次的具体要求定制的，明记如果组织架构不一样（比如没有"人事经理"这个岗位、或者薪资可见范围要求不同），要重新问业主、按明记实际情况调整，不要照抄。
 
