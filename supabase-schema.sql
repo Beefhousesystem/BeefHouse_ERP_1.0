@@ -66,13 +66,27 @@ begin
 end;
 $$;
 
+-- 同样的道理：「白名单是否为空」这个判断也不能直接裸写在策略里（会被内联、一样触发递归），
+-- 必须包进一个 plpgsql 函数。
+create or replace function public.erp_users_is_empty()
+returns boolean
+language plpgsql
+security definer
+stable
+set search_path = public
+as $$
+begin
+  return not exists (select 1 from public.erp_users);
+end;
+$$;
+
 drop policy if exists "erp_users authed write" on public.erp_users;         -- 移除旧的「任何登录用户皆可写」策略
 drop policy if exists "erp_users admin or bootstrap write" on public.erp_users;
 create policy "erp_users admin or bootstrap write"
   on public.erp_users for all
   to authenticated
-  using ( public.erp_is_admin() or not exists (select 1 from public.erp_users) )
-  with check ( public.erp_is_admin() or not exists (select 1 from public.erp_users) );
+  using ( public.erp_is_admin() or public.erp_users_is_empty() )
+  with check ( public.erp_is_admin() or public.erp_users_is_empty() );
 
 -- ========== 第 3 部分：注册邀请码 → 自动分配角色 ==========
 -- 目的：注册时前端会把「邀请码」打包成 invite_code 传给 Supabase Auth。
