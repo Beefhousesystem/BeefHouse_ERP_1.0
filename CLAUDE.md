@@ -91,6 +91,19 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 ⚠️ 复制给明记时，明记要用**自己的邀请码**（配合明记自己独立的 Supabase 项目），触发器里的 `case` 对照表和免邀请码邮箱清单也要换成明记的一套，不要沿用牛室这组。
 🐛 **踩过的坑（2026-09-19）**：`erp_is_admin()` 一开始写成 `language sql`，导致登录时 `select * from erp_users` 报 `42P17 infinite recursion detected in policy for relation "erp_users"`（500 错误，网页显示"白名单表尚未建立"）——原因是 sql 函数会被规划器内联展开，函数内部又查 `erp_users` 本身，被判定成策略里查自己触发死循环。改成 `language plpgsql` 后还没完全好，因为策略里**还直接裸写了一句 `not exists (select 1 from public.erp_users)`**（判断白名单是否为空），同样的坑犯了两次——同样会被内联触发递归。**最终把这句也包进一个 `erp_users_is_empty()` 的 plpgsql 函数**才彻底解决。**教训**：任何 RLS 策略的 `using`/`with check` 里，只要会查到「策略所在的那张表本身」，不管是直接写裸查询还是包在函数里，都必须用 `language plpgsql`（不能是 `language sql`），逐条检查，不要漏掉任何一处裸查询。
 
+## 安全加固：erp_store 按分店隔离 + 薪资单独上锁（2026-09-19）
+上线前审核发现 `erp_store`（存全部业务数据的表）原本是「只要登录就能读写全部 key」——任何员工账号理论上都能在浏览器开发者工具里直接调 API 读到所有分店、包括薪资在内的全部数据。已改成：
+1. **按分店隔离**：`erpv2:<outletId>` 这种一般业务数据，只有**本人所属分店**或**老板/区域副经理（全分店角色）**能读写。见 `supabase-schema.sql` 第 4 部分 `erp_can_read_key`/`erp_can_write_key`。
+2. **薪资单独拆出来上锁**：`payrollRuns`（薪资发放的计算结果）已经从主档案 JSON 里拆成独立的 key `erpv2:payroll:<outletId>`，**只有老板/区域副经理能读写，店长/厨师长/员工一律不给**，从数据库层面彻底挡住。对应改动：
+   - `index.html` 的 `save(oid)`：写入时会把 `payrollRuns` 从主档案里剥离，分开存到 `erpv2:payroll:<outletId>`。
+   - `index.html` 的 `loadDB()`：读取时额外去读 `erpv2:payroll:<outletId>`，读不到（没权限/还没有）就给空对象 `{}`，不影响其它模块。
+   - `supabase-schema.sql` 第 4 部分末尾有**一次性迁移 SQL**：把之前已经塞在主档案里的旧 `payrollRuns` 挪到新 key、再从主档案删掉（可重复执行，第二次没东西可挪会自动跳过）。
+3. **权限配置 `erpv2:roleperms`**：任何登录用户可读（App 要用它判断能看哪些页面），只有老板/区域副经理能写。
+4. `erp_store` **没有开放 delete 权限**（App 从不删除这张表的行，直接不给更安全）。
+
+⚠️ **发现但先没动的关联 bug**：`index.html` 里 `function currentEmpId(){return 1;}` 是**写死返回 1**——意味着「员工自助只看自己」这个筛选（考勤/请假/排班/薪资自助）目前不管谁登录都固定抓的是员工编号 1 的记录，不是真的登录者本人。这次只是把薪资**从数据库层面**锁给老板/区域副经理，没有连带修这个 `currentEmpId()`——因为要修好它，需要先建立「登录账号 ↔ 具体哪位员工」的对应关系（目前完全没有这个关联字段），是另一块工程量。**这意味着目前员工角色的"自助查看自己薪资/考勤"功能实质上是失效/认错人的，需要单独排期重做**（先把登录邮箱和员工档案关联起来，再重写 `currentEmpId()`）。
+⚠️ 复制给明记时，`erp_can_read_key`/`erp_can_write_key` 里对 `payroll`/`roleperms` 的判断逻辑通用，不用改；但记得整套 RLS 都要在明记自己独立的 Supabase 项目里重新跑一遍。
+
 ### 换账号做同样的事——安全吗？
 - **共享代码（GitHub 仓库）**：安全。别给不信任的人 **write** 权限（能改代码=能改上线 App）；给只读即可。
 - **共享数据（Supabase）**：网页里已内嵌 publishable key（设计上可公开），**真正的保护是 Supabase RLS + App 登录 + 牛室/明记分库**。**牛室与明记必须两个独立 Supabase 项目**（已做到）。**绝不要**把 service_role 密钥写进 HTML（目前只放了 publishable key，是对的）。

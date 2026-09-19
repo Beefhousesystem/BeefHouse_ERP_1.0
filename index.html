@@ -616,7 +616,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0919b";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0919c";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -1040,9 +1040,20 @@ async function loadDB(){
     try{const r=await Store.get('erpv2:'+o.id);data=r?JSON.parse(r.value):null;}catch(e){data=null;}
     if(!data || data._sv!==SEED_VERSION){ data=seed(o.id); DB[o.id]=data; syncMenuPrices(data); ensureDishCosts(data); try{await save(o.id);}catch(e){} }
     else { DB[o.id]=data; let ch=syncMenuPrices(data); if(ensureDishCosts(data))ch=true; if(ch){try{await save(o.id);}catch(e){}} }
+    // 薪资(payrollRuns)单独存到受保护的 key（erp_store RLS 只放行老板/区域副经理）：
+    // 权限不够时 Store.get 会静默失败/返回空，不影响其余模块正常使用。
+    try{const pr=await Store.get('erpv2:payroll:'+o.id);if(pr)DB[o.id].payrollRuns=JSON.parse(pr.value);}
+    catch(e){}
+    DB[o.id].payrollRuns=DB[o.id].payrollRuns||{};
   }
 }
-async function save(oid){try{await Store.set('erpv2:'+(oid||curOutlet),JSON.stringify(DB[oid||curOutlet]));}catch(e){}}
+async function save(oid){
+  oid=oid||curOutlet;
+  const full=DB[oid];if(!full)return;
+  const {payrollRuns,...rest}=full; // 薪资不写进主档案，避免和其它数据混在同一条 RLS 规则下
+  try{await Store.set('erpv2:'+oid,JSON.stringify(rest));}catch(e){}
+  try{await Store.set('erpv2:payroll:'+oid,JSON.stringify(payrollRuns||{}));}catch(e){}
+}
 async function reloadOutlet(oid){try{const r=await Store.get('erpv2:'+oid);if(r)DB[oid]=JSON.parse(r.value);}catch(e){}}
 /* ---- 角色权限：全局配置，持久化到云端/本地，所有分店同步 ---- */
 const ROLE_DEFAULTS=Object.fromEntries(Object.keys(ROLES).map(k=>[k,ROLES[k].can.slice()]));

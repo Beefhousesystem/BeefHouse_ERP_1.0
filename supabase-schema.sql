@@ -154,6 +154,108 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
+-- ========== 第 4 部分：erp_store 按分店隔离 + 薪资单独上锁 ==========
+-- 背景：erp_store 原本是「只要登录就能读写全部 key」，等于任何一个员工账号
+-- 都能在浏览器里直接读到所有分店的全部业务数据。这里改成：
+--   · 一般业务数据（erpv2:<outletId>）：只有本人所属分店 + 老板/区域副经理(全分店角色)能读写。
+--   · erpv2:roleperms（权限配置）：任何登录用户可读，只有老板/区域副经理能写。
+--   · erpv2:payroll:<outletId>（薪资，2026-09-19 起单独拆分出来）：只有老板/区域副经理能读写，
+--     其余角色（含本店店长/厨师长/员工）一律不给，从数据库层面彻底挡住直接翻薪资源数据。
+-- ⚠️ 同上面 erp_is_admin 的教训：这里查 erp_users 的函数不会造成递归（erp_store 和 erp_users
+-- 是两张不同的表），但仍统一用 language plpgsql 写，保持风格一致、也更保险。
+create or replace function public.erp_can_read_key(k text)
+returns boolean
+language plpgsql
+security definer
+stable
+set search_path = public
+as $$
+declare
+  v_email text := auth.jwt()->>'email';
+  v_role text;
+  v_outlet text;
+begin
+  select role, outlet into v_role, v_outlet
+  from public.erp_users
+  where email = v_email and active;
+
+  if v_role is null then
+    return false; -- 未登录/不在白名单，一律不给
+  end if;
+
+  if k = 'erpv2:roleperms' then
+    return true; -- 权限配置：任何已登录白名单用户都可读（App 要用它判断能看哪些页面）
+  end if;
+
+  if k like 'erpv2:payroll:%' then
+    return v_role in ('owner','area'); -- 薪资：只有全权角色能读，员工/店长/厨师长一律不给
+  end if;
+
+  if v_role in ('owner','area') then
+    return true; -- 全分店角色，其余业务数据都能看
+  end if;
+
+  return k = 'erpv2:' || v_outlet; -- 其他角色只能碰自己所属分店那一份
+end;
+$$;
+
+create or replace function public.erp_can_write_key(k text)
+returns boolean
+language plpgsql
+security definer
+stable
+set search_path = public
+as $$
+begin
+  if k = 'erpv2:roleperms' then
+    return public.erp_is_admin(); -- 权限配置只有老板/区域副经理能改
+  end if;
+  if k like 'erpv2:payroll:%' then
+    return public.erp_is_admin(); -- 薪资写入同样只给老板/区域副经理
+  end if;
+  return public.erp_can_read_key(k); -- 其余业务数据：能读的分店范围内也能写(配合本店日常操作)
+end;
+$$;
+
+drop policy if exists "erp_store authed full access" on public.erp_store;    -- 移除旧的「登录即全开」策略
+drop policy if exists "erp_store select scoped" on public.erp_store;
+drop policy if exists "erp_store insert scoped" on public.erp_store;
+drop policy if exists "erp_store update scoped" on public.erp_store;
+create policy "erp_store select scoped"
+  on public.erp_store for select
+  to authenticated
+  using ( public.erp_can_read_key(key) );
+create policy "erp_store insert scoped"
+  on public.erp_store for insert
+  to authenticated
+  with check ( public.erp_can_write_key(key) );
+create policy "erp_store update scoped"
+  on public.erp_store for update
+  to authenticated
+  using ( public.erp_can_read_key(key) )
+  with check ( public.erp_can_write_key(key) );
+-- 没有 delete 策略：App 从不删 erp_store 的行，所以直接不开放删除权限（更安全的默认值）。
+
+-- 一次性迁移：把已经存在、还塞在主档案里的 payrollRuns 挪到新的受保护 key，
+-- 再从主档案里删掉。可重复执行（第二次跑不会有 payrollRuns 可挪，自动跳过）。
+insert into public.erp_store (key, value, updated_at)
+select 'erpv2:payroll:' || substring(key from 7),
+       coalesce(value->'payrollRuns', '{}'::jsonb),
+       now()
+from public.erp_store
+where key like 'erpv2:%'
+  and key <> 'erpv2:roleperms'
+  and key not like 'erpv2:payroll:%'
+  and value ? 'payrollRuns'
+on conflict (key) do update set value = excluded.value, updated_at = excluded.updated_at;
+
+update public.erp_store
+set value = value - 'payrollRuns'
+where key like 'erpv2:%'
+  and key <> 'erpv2:roleperms'
+  and key not like 'erpv2:payroll:%'
+  and value ? 'payrollRuns';
+
 -- ============================================================
 -- 首次使用：
 -- 1) 上面跑完后，去 Authentication → Providers → Email 确认已开启；
