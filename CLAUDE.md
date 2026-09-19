@@ -72,14 +72,18 @@
 - 复制完，明记那边**可继续自行修改**（它有独立的一份代码+数据）。
 
 ## 注册邀请码（牛室，2026-09）
-员工/管理层首次注册账号时，在注册表单「邀请码 / 口令」栏填入对应邀请码，由 Supabase 触发器识别并赋予角色（`role`：owner / area / manager / headchef / staff）：
+员工/管理层首次注册账号时，在注册表单「邀请码 / 口令」栏填入对应邀请码，由 Supabase 触发器识别并赋予角色和分店：
 
-| 角色 | 邀请码 |
-|---|---|
-| 区域副经理 | `tcymgmt888` |
-| 店面经理 | `bfmgr888` |
-| 厨师长 | `chef888` |
-| 员工 | `bfstaff888` |
+| 角色 | 邀请码 | 分店 |
+|---|---|---|
+| 区域副经理 `area` | `tcymgmt888` | 全分店 |
+| Setapak店 店面经理 `manager` | `stpbhmgr888` | Setapak店 (b1) |
+| Setapak店 厨师长 `headchef` | `stpbhchef888` | Setapak店 (b1) |
+| Setapak店 员工 `staff` | `stpbhstaff888` | Setapak店 (b1) |
+| 中央经理 `ckmanager` | `tcymgr888` | 中央厨房 (ck) |
+| 中央员工 `ckstaff` | `tcystaff888` | 中央厨房 (ck) |
+
+⚠️ **2026-09-19 二次更新**：店面/厨师长/员工的邀请码从原本通用的 `bfmgr888`/`chef888`/`bfstaff888` 改成带 **Setapak 店名前缀**的 `stpbh*888`——因为以后可能会开更多分店，以后每开一间新分店都要给它专属的一组邀请码（不能沿用 Setapak 这组，否则新店员工会被分到 Setapak 去）。新增两个「中央厨房」专属角色 `ckmanager`/`ckstaff`（锁定在 `outlet='ck'`，见下方权限说明）。
 
 ✅ **2026-09-19 更新**：邀请码判定逻辑已写进 `supabase-schema.sql`（第 3 部分，函数名 `handle_new_user`，绑在 `on_auth_user_created` 触发器上），需要去 Supabase SQL Editor 手动跑一遍脚本才会生效。前端 (`index.html` 的 `doAuthSignup`) 也加了「必填」校验，不填不给交。
 🐛 **踩过的坑（关键）**：牛室这个正式 Supabase 项目里，**`auth.users` 早就绑了一个同名触发器 `on_auth_user_created`（函数 `handle_new_user`）**，是这次对话之前就已经存在的旧逻辑——它认的邀请码是 `bmr888` / `BHMGR888` / `BHSTAFF123` 这种跟本备忘完全对不上的词，而且**任何邀请码填错/填了不认识的词，它都默默给 staff，不会拒绝**。一开始我们另外新建了一个名字不同的触发器 `on_auth_user_created_invite`，结果实际生效的还是旧的那个（新的建立指令当时没跑到/没生效），导致填对邀请码也还是被分配成 staff。**最终修法：直接把 `handle_new_user` 这个既有函数的内容覆盖成正确逻辑，不再另外建新触发器**——如果你之后又发现邀请码不生效，第一件事就是去查 `auth.users` 上实际绑的是哪个触发器、对应哪个函数，不要假设一定是本文件里这份在跑：
@@ -90,6 +94,45 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 ✅ **免邀请码例外**：`yxchong3@gmail.com`（老板本人）注册时永远免填邀请码、直接给『老板』角色——前端 `codeExemptEmails` 和后台触发器 `v_code_exempt_emails` 两处都要同步改（目前只放了这一个邮箱，之后如需再加免邀请码账号，两处都要加）。
 ⚠️ 复制给明记时，明记要用**自己的邀请码**（配合明记自己独立的 Supabase 项目），触发器里的 `case` 对照表和免邀请码邮箱清单也要换成明记的一套，不要沿用牛室这组。
 🐛 **踩过的坑（2026-09-19）**：`erp_is_admin()` 一开始写成 `language sql`，导致登录时 `select * from erp_users` 报 `42P17 infinite recursion detected in policy for relation "erp_users"`（500 错误，网页显示"白名单表尚未建立"）——原因是 sql 函数会被规划器内联展开，函数内部又查 `erp_users` 本身，被判定成策略里查自己触发死循环。改成 `language plpgsql` 后还没完全好，因为策略里**还直接裸写了一句 `not exists (select 1 from public.erp_users)`**（判断白名单是否为空），同样的坑犯了两次——同样会被内联触发递归。**最终把这句也包进一个 `erp_users_is_empty()` 的 plpgsql 函数**才彻底解决。**教训**：任何 RLS 策略的 `using`/`with check` 里，只要会查到「策略所在的那张表本身」，不管是直接写裸查询还是包在函数里，都必须用 `language plpgsql`（不能是 `language sql`），逐条检查，不要漏掉任何一处裸查询。
+
+## 安全加固：erp_store 按分店隔离 + 薪资单独上锁（2026-09-19）
+上线前审核发现 `erp_store`（存全部业务数据的表）原本是「只要登录就能读写全部 key」——任何员工账号理论上都能在浏览器开发者工具里直接调 API 读到所有分店、包括薪资在内的全部数据。已改成：
+1. **按分店隔离**：`erpv2:<outletId>` 这种一般业务数据，只有**本人所属分店**或**老板/人事经理/区域副经理（全分店角色）**能读写。见 `supabase-schema.sql` 第 4 部分 `erp_can_read_key`/`erp_can_write_key`。
+2. **薪资发放结果单独拆出来上锁**：`payrollRuns`（薪资发放的月度计算结果/finalize 状态）已经从主档案 JSON 里拆成独立的 key `erpv2:payroll:<outletId>`，**只有老板/人事经理能读，只有人事经理能写**（连老板都不给写，配合前端 `canRunPayroll` 锁死），区域副经理/店长/厨师长/员工一律不给读写。对应改动：
+   - `index.html` 的 `save(oid)`：写入时会把 `payrollRuns` 从主档案里剥离，分开存到 `erpv2:payroll:<outletId>`。
+   - `index.html` 的 `loadDB()`：读取时额外去读 `erpv2:payroll:<outletId>`，读不到（没权限/还没有）就给空对象 `{}`，不影响其它模块。
+   - `supabase-schema.sql` 第 4 部分末尾有**一次性迁移 SQL**：把之前已经塞在主档案里的旧 `payrollRuns` 挪到新 key、再从主档案删掉（可重复执行，第二次没东西可挪会自动跳过）。
+3. **权限配置 `erpv2:roleperms`**：任何登录用户可读（App 要用它判断能看哪些页面），只有老板/人事经理/区域副经理能写。
+4. `erp_store` **没有开放 delete 权限**（App 从不删除这张表的行，直接不给更安全）。
+5. ⚠️ **已知限制（还没堵上的洞）**：员工每人的底薪/津贴等字段目前还是存在 `erpv2:<outletId>` 主档案里的 `staff` 数组中，**没有**跟着搬到上面拆出来的 `payroll` key——因为店长现在按下面的新需求要能看到「本店每个人的薪资明细」，本店主档案本来就要对同店的店长/厨师长/员工开放读取（不然打卡/排班/库存等其它功能也用不了）。也就是说，技术熟悉的厨师长/员工理论上仍可能在浏览器里翻到同店其他同事的底薪字段——UI 上「只看自己」这层保护目前也还没做好（`currentEmpId()` 硬编码见下）。要彻底堵住，需要把员工的底薪/津贴等敏感字段也搬出主档案、单独配一把「只认本人」的锁，是比这次更大的一次改动，先记录着，未来排期再做。
+
+## 岗位角色调整：新增「人事经理」+ 薪资可见范围四级制（2026-09-19）
+业主要求把原本"老板/人事经理"合并的角色拆开，并重新定义薪资可见范围：
+- **老板 `owner`**：权限不变（全权、全部分店），能看**全部分店每个人的薪资明细**，但**不能编辑/执行薪资发放**（`canRunPayroll:false`）——只能看，不能动。
+- **人事经理 `hrmanager`**（新增角色）：**权限和老板完全一样**（同样的 `can` 模块清单、全分店、系统设置等），额外多一条：**唯一能编辑/执行薪资发放的角色**（`canRunPayroll:true`）。**不走邀请码注册**，由老板在「设置 → 白名单/用户管理」里直接把某个已注册账号的岗位改成「人事经理」即可（`erp_users.role='hrmanager'`，不需要 Supabase 触发器改动，因为白名单角色本来就能在 App 里手动改）。
+- **区域副经理 `area`**：不变——薪资只看总数，但现在总数包含**全部分店合计 + 各分店细分小计**（原本只有一个笼统总数），需要把门店切到「全部分店 ALL」视图才看得到分店小计。
+- **店长/店面经理 `manager`**（沿用原本 `manager` 角色）：从原本只能看自己薪资，升级成**能看本店每一位员工的薪资明细**（因为 `manager` 本身 `allBranch:false`、`curOutlet` 锁定在自己分店，所以"本店"这层隔离是天然的，不用额外写代码），但**不能编辑**薪资发放。
+- **厨师长 `headchef` / 员工 `staff`**：不变，只能看自己的薪资（`salaryView:"self"`）——顺手把 `headchef` 补上了 `payroll` 这个模块权限（原本 `can` 列表漏了，导致厨师长的"自助查看自己薪资"功能其实进不去页面，算是顺便修的一个小 bug）。
+
+**代码里的关键函数**（`index.html`）：
+- `canSeeSalary()`：`salaryView==="full"` → 决定是否看得到 OpEx 页面的人工成本明细 + 是否走"全部个人明细"的渲染分支。
+- `canRunPayroll()`（新增）：`ROLES[curRole].canRunPayroll===true` → 决定能不能进「薪资发放 Payroll Run」编辑页、能不能在「人事薪资 Payroll」页做新增/编辑/删除员工的操作。目前只有 `hrmanager` 为 `true`。
+- `pageAllowed('payrun')`：原本是 `can('payroll')&&canSeeSalary()`（老板能进），改成 `can('payroll')&&canRunPayroll()`（只有人事经理能进）。
+- `canW('payroll')`：额外加了 `&&canRunPayroll()`，堵住"虽然进不去 Payrun 编辑页，但还能从 Payroll 查看页的行内编辑/删除按钮改数据"这个漏洞。
+- `pgPayroll()` 的 `salaryScope()` 四级：`full`(老板/人事经理，全分店个人明细) / `branch`(店长，本店个人明细) / `total`(区域副经理，全部+各店小计) / `self`(厨师长/员工，只看自己)。
+- 全文件里原本一批写死的 `['owner','area']`（订单确认/央厨订货/应付账款重开等跟薪资无关的管理权限判断）**已经批量加上 `hrmanager`**，确保"人事经理权限和老板一样"这句话在薪资以外的模块也成立。
+
+## 新增「中央经理/中央员工」两个角色，锁定在中央厨房分店（2026-09-19）
+业主参考明记那边已经有的「中央经理/中央员工」角色截图，要求牛室也加两个对应角色，权限只限中央厨房(`outlet:'ck'`)：
+- **中央经理 `ckmanager`**（邀请码 `tcymgr888`）：`can` = `["dash","proc","waste","ck","inv","stock","ap","opex","report","hr","attend","schedule","leave","payroll"]`。采购进销页里含订货单/进货单/退货补货/报废损耗（`proc`+`waste`），**不含跨店调拨**（没给 `transfer`）。`allBranch:false`，`hrScope`/`salaryView` 都是 `"branch"`（能看中央厨房员工的薪资明细，不能编辑），`approveLeave:true`。
+- **中央员工 `ckstaff`**（邀请码 `tcystaff888`）：`can` = `["transfer","ck","inv","stock","hr","attend","schedule","leave","payroll"]`。**没有 `dash`（看不到利润大盘）**，采购进销页**只有跨店调拨**这一张卡（因为只给了 `transfer`，没给 `proc`/`waste`）。`hrScope`/`salaryView` 都是 `"self"`，只能看自己的薪资/考勤。
+- 两个角色的 `outlet` 由后台触发器自动锁定成 `'ck'`（`handle_new_user()` 里 `v_role in ('ckmanager','ckstaff')` 时把 `v_outlet` 设成 `'ck'`），业主在「设置→白名单」手动加人时也要记得把「所属分店」选成「中央厨房」。
+- 这两个角色权限清单是照着业主截图**近似还原**明记那边"中央经理/中央员工"角色的样子（明记是他们自己独立的一套代码，我没有直接权限去看，只能靠业主给的截图和文字描述反推）——如果实际用起来发现某个模块该给没给、或不该给却给了，随时可以让我再调整 `ckmanager`/`ckstaff` 的 `can` 数组。
+
+⚠️ **复制给明记时**：这一整套角色/权限设计（`ROLES` 常量、`erp_is_admin`/`erp_can_read_key`/`erp_can_write_key` 里的角色白名单）是牛室按业主这次的具体要求定制的，明记如果组织架构不一样（比如没有"人事经理"这个岗位、或者薪资可见范围要求不同），要重新问业主、按明记实际情况调整，不要照抄。
+
+⚠️ **发现但先没动的关联 bug**：`index.html` 里 `function currentEmpId(){return 1;}` 是**写死返回 1**——意味着「员工自助只看自己」这个筛选（考勤/请假/排班/薪资自助）目前不管谁登录都固定抓的是员工编号 1 的记录，不是真的登录者本人。这次只是把薪资**从数据库层面**锁给老板/区域副经理，没有连带修这个 `currentEmpId()`——因为要修好它，需要先建立「登录账号 ↔ 具体哪位员工」的对应关系（目前完全没有这个关联字段），是另一块工程量。**这意味着目前员工角色的"自助查看自己薪资/考勤"功能实质上是失效/认错人的，需要单独排期重做**（先把登录邮箱和员工档案关联起来，再重写 `currentEmpId()`）。
+⚠️ 复制给明记时，`erp_can_read_key`/`erp_can_write_key` 里对 `payroll`/`roleperms` 的判断逻辑通用，不用改；但记得整套 RLS 都要在明记自己独立的 Supabase 项目里重新跑一遍。
 
 ### 换账号做同样的事——安全吗？
 - **共享代码（GitHub 仓库）**：安全。别给不信任的人 **write** 权限（能改代码=能改上线 App）；给只读即可。
