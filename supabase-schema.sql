@@ -67,6 +67,57 @@ create policy "erp_users admin or bootstrap write"
   using ( public.erp_is_admin() or not exists (select 1 from public.erp_users) )
   with check ( public.erp_is_admin() or not exists (select 1 from public.erp_users) );
 
+-- ========== 第 3 部分：注册邀请码 → 自动分配角色 ==========
+-- 目的：注册时前端会把「邀请码」打包成 invite_code 传给 Supabase Auth。
+-- 这段触发器在新用户注册（auth.users 新增一行）时自动读取 invite_code，
+-- 按下表分配角色写入 erp_users；邀请码不在名单内 → 直接拒绝注册（报错、不会建立账号）。
+-- 唯一例外：白名单 erp_users 还是空表时（系统首次启用），第一个注册的人
+-- 不看邀请码，直接设为『老板』（配合前端的首次引导）。
+--
+-- 邀请码对照表（如需改邀请码，改下面 case 里的字符串即可）：
+--   tcymgmt888 → area     (区域副经理)
+--   bfmgr888   → manager  (店面经理)
+--   chef888    → headchef (厨师长)
+--   bfstaff888 → staff    (员工)
+create or replace function public.handle_new_user_invite()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_code text := coalesce(new.raw_user_meta_data->>'invite_code','');
+  v_role text;
+begin
+  v_role := case v_code
+    when 'tcymgmt888' then 'area'
+    when 'bfmgr888'   then 'manager'
+    when 'chef888'    then 'headchef'
+    when 'bfstaff888' then 'staff'
+    else null
+  end;
+
+  if v_role is null then
+    if not exists (select 1 from public.erp_users) then
+      v_role := 'owner';  -- 白名单为空 → 首位注册者自动成为老板，不检查邀请码
+    else
+      raise exception '邀请码无效或未填写，请向管理员索取正确的邀请码后再注册';
+    end if;
+  end if;
+
+  insert into public.erp_users (email, name, role, outlet, active)
+  values (lower(new.email), split_part(new.email,'@',1), v_role, 'b1', true)
+  on conflict (email) do update set role = excluded.role, active = true;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created_invite on auth.users;
+create trigger on_auth_user_created_invite
+  after insert on auth.users
+  for each row execute function public.handle_new_user_invite();
+
 -- ============================================================
 -- 首次使用：
 -- 1) 上面跑完后，去 Authentication → Providers → Email 确认已开启；

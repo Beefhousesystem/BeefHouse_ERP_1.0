@@ -616,7 +616,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0918a";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0919a";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -4029,7 +4029,7 @@ function showAuthLogin(msg){
     ${msg?`<div class="al al-r" style="text-align:left;">${msg}</div>`:''}
     <div class="fr" style="text-align:left;margin-bottom:8px;"><label>${LANG==="zh"?"邮箱":"Email"}</label><input id="au_email" type="email" placeholder="you@example.com" autocomplete="username"></div>
     <div class="fr" style="text-align:left;"><label>${LANG==="zh"?"密码":"Password"}</label><input id="au_pw" type="password" placeholder="••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doAuthLogin()"></div>
-    <div class="fr" style="text-align:left;margin-bottom:8px;"> <label>邀请码 / 口令 (店长或店员)</label> <input id="au_code" type="text" placeholder="输入入职邀请码 (仅首次注册必填)" autocomplete="off"> </div>
+    <div class="fr" style="text-align:left;margin-bottom:8px;"> <label>邀请码 / 口令 (店长或店员) *</label> <input id="au_code" type="text" placeholder="首次注册必填，向管理员索取" autocomplete="off"> </div>
     <button class="btn block brand" style="margin-top:6px;" onclick="doAuthLogin()">🔓 ${LANG==="zh"?"登录":"Sign In"}</button>
     <button class="btn block ghost" style="margin-top:8px;" onclick="doAuthSignup()">🆕 ${LANG==="zh"?"首次使用？注册账号":"First time? Sign Up"}</button>
     <div id="au_msg" class="mini" style="margin-top:10px;min-height:16px;"></div>
@@ -4062,6 +4062,10 @@ async function doAuthSignup(){
 
   if(!email || !pw){
     if(m) m.innerHTML = '▲ 请输入邮箱和密码（至少6位）';
+    return;
+  }
+  if(!code){
+    if(m) m.innerHTML = '▲ 请输入邀请码 / 口令（向管理员索取，首次注册必填）';
     return;
   }
 
