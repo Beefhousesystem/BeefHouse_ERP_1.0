@@ -84,6 +84,7 @@
 ✅ **2026-09-19 更新**：邀请码判定逻辑已写进 `supabase-schema.sql`（第 3 部分 `handle_new_user_invite` 触发器），需要去 Supabase SQL Editor 手动跑一遍脚本才会生效。跑之前发现：`erp_users` 白名单原本谁都能自动加入（默认给 staff），邀请码栏其实没被校验——已修正为**邀请码错误/没填直接拒绝注册**（首位老板注册例外，走白名单为空自动引导）。前端 (`index.html` 的 `doAuthSignup`) 也加了「必填」校验，不填不给交。
 ✅ **免邀请码例外**：`yxchong3@gmail.com`（老板本人）注册时永远免填邀请码、直接给『老板』角色——前端 `codeExemptEmails` 和后台触发器 `v_code_exempt_emails` 两处都要同步改（目前只放了这一个邮箱，之后如需再加免邀请码账号，两处都要加）。
 ⚠️ 复制给明记时，明记要用**自己的邀请码**（配合明记自己独立的 Supabase 项目），触发器里的 `case` 对照表和免邀请码邮箱清单也要换成明记的一套，不要沿用牛室这组。
+🐛 **踩过的坑（2026-09-19）**：`erp_is_admin()` 一开始写成 `language sql`，导致登录时 `select * from erp_users` 报 `42P17 infinite recursion detected in policy for relation "erp_users"`（500 错误，网页显示"白名单表尚未建立"）——原因是 sql 函数会被规划器内联展开，函数内部又查 `erp_users` 本身，被判定成策略里查自己触发死循环。**已改成 `language plpgsql`** 解决（plpgsql 函数不会被内联，规划器当黑盒调用）。以后凡是写「RLS 策略里调用的、且函数内部会查同一张表」的函数，一律用 `language plpgsql`，不要用 `language sql`。
 
 ### 换账号做同样的事——安全吗？
 - **共享代码（GitHub 仓库）**：安全。别给不信任的人 **write** 权限（能改代码=能改上线 App）；给只读即可。

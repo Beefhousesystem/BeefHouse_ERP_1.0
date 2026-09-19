@@ -45,18 +45,25 @@ create policy "erp_users authed read"
 
 -- 写入收紧：只有「老板/区域副经理」才能改白名单（新增/停用员工、改角色）。
 -- 例外：首次使用、白名单还是空表时放行——让第一个注册的人能被设为老板（配合 App 的自动引导）。
+-- ⚠️ 这个函数必须是 language plpgsql（不能用 language sql）：sql 函数会被规划器内联展开，
+-- 而它内部又查询 erp_users 本身，会被判定成「策略里查自己的表」触发
+-- "infinite recursion detected in policy for relation erp_users"（错误代码 42P17）。
+-- plpgsql 函数不会被内联，规划器把它当黑盒调用，才不会触发这个死循环检测。
 create or replace function public.erp_is_admin()
 returns boolean
-language sql
+language plpgsql
 security definer
 stable
+set search_path = public
 as $$
-  select exists (
+begin
+  return exists (
     select 1 from public.erp_users u
     where u.email = auth.jwt()->>'email'
       and u.role in ('owner','area')
       and u.active
   );
+end;
 $$;
 
 drop policy if exists "erp_users authed write" on public.erp_users;         -- 移除旧的「任何登录用户皆可写」策略
