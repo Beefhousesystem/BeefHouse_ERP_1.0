@@ -71,8 +71,9 @@ create policy "erp_users admin or bootstrap write"
 -- 目的：注册时前端会把「邀请码」打包成 invite_code 传给 Supabase Auth。
 -- 这段触发器在新用户注册（auth.users 新增一行）时自动读取 invite_code，
 -- 按下表分配角色写入 erp_users；邀请码不在名单内 → 直接拒绝注册（报错、不会建立账号）。
--- 唯一例外：白名单 erp_users 还是空表时（系统首次启用），第一个注册的人
+-- 例外 1：白名单 erp_users 还是空表时（系统首次启用），第一个注册的人
 -- 不看邀请码，直接设为『老板』（配合前端的首次引导）。
+-- 例外 2：yxchong3@gmail.com（老板本人）永远免邀请码，直接设为『老板』。
 --
 -- 邀请码对照表（如需改邀请码，改下面 case 里的字符串即可）：
 --   tcymgmt888 → area     (区域副经理)
@@ -88,20 +89,26 @@ as $$
 declare
   v_code text := coalesce(new.raw_user_meta_data->>'invite_code','');
   v_role text;
+  v_email text := lower(new.email);
+  v_code_exempt_emails text[] := array['yxchong3@gmail.com']; -- 免邀请码白名单（如老板本人账号）
 begin
-  v_role := case v_code
-    when 'tcymgmt888' then 'area'
-    when 'bfmgr888'   then 'manager'
-    when 'chef888'    then 'headchef'
-    when 'bfstaff888' then 'staff'
-    else null
-  end;
+  if v_email = any(v_code_exempt_emails) then
+    v_role := 'owner';
+  else
+    v_role := case v_code
+      when 'tcymgmt888' then 'area'
+      when 'bfmgr888'   then 'manager'
+      when 'chef888'    then 'headchef'
+      when 'bfstaff888' then 'staff'
+      else null
+    end;
 
-  if v_role is null then
-    if not exists (select 1 from public.erp_users) then
-      v_role := 'owner';  -- 白名单为空 → 首位注册者自动成为老板，不检查邀请码
-    else
-      raise exception '邀请码无效或未填写，请向管理员索取正确的邀请码后再注册';
+    if v_role is null then
+      if not exists (select 1 from public.erp_users) then
+        v_role := 'owner';  -- 白名单为空 → 首位注册者自动成为老板，不检查邀请码
+      else
+        raise exception '邀请码无效或未填写，请向管理员索取正确的邀请码后再注册';
+      end if;
     end if;
   end if;
 
