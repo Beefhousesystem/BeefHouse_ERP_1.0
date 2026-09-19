@@ -45,18 +45,39 @@ create policy "erp_users authed read"
 
 -- 写入收紧：只有「老板/区域副经理」才能改白名单（新增/停用员工、改角色）。
 -- 例外：首次使用、白名单还是空表时放行——让第一个注册的人能被设为老板（配合 App 的自动引导）。
+-- ⚠️ 这个函数必须是 language plpgsql（不能用 language sql）：sql 函数会被规划器内联展开，
+-- 而它内部又查询 erp_users 本身，会被判定成「策略里查自己的表」触发
+-- "infinite recursion detected in policy for relation erp_users"（错误代码 42P17）。
+-- plpgsql 函数不会被内联，规划器把它当黑盒调用，才不会触发这个死循环检测。
 create or replace function public.erp_is_admin()
 returns boolean
-language sql
+language plpgsql
 security definer
 stable
+set search_path = public
 as $$
-  select exists (
+begin
+  return exists (
     select 1 from public.erp_users u
     where u.email = auth.jwt()->>'email'
       and u.role in ('owner','area')
       and u.active
   );
+end;
+$$;
+
+-- 同样的道理：「白名单是否为空」这个判断也不能直接裸写在策略里（会被内联、一样触发递归），
+-- 必须包进一个 plpgsql 函数。
+create or replace function public.erp_users_is_empty()
+returns boolean
+language plpgsql
+security definer
+stable
+set search_path = public
+as $$
+begin
+  return not exists (select 1 from public.erp_users);
+end;
 $$;
 
 drop policy if exists "erp_users authed write" on public.erp_users;         -- 移除旧的「任何登录用户皆可写」策略
@@ -64,22 +85,31 @@ drop policy if exists "erp_users admin or bootstrap write" on public.erp_users;
 create policy "erp_users admin or bootstrap write"
   on public.erp_users for all
   to authenticated
-  using ( public.erp_is_admin() or not exists (select 1 from public.erp_users) )
-  with check ( public.erp_is_admin() or not exists (select 1 from public.erp_users) );
+  using ( public.erp_is_admin() or public.erp_users_is_empty() )
+  with check ( public.erp_is_admin() or public.erp_users_is_empty() );
 
 -- ========== 第 3 部分：注册邀请码 → 自动分配角色 ==========
 -- 目的：注册时前端会把「邀请码」打包成 invite_code 传给 Supabase Auth。
 -- 这段触发器在新用户注册（auth.users 新增一行）时自动读取 invite_code，
 -- 按下表分配角色写入 erp_users；邀请码不在名单内 → 直接拒绝注册（报错、不会建立账号）。
--- 唯一例外：白名单 erp_users 还是空表时（系统首次启用），第一个注册的人
+-- 例外 1：白名单 erp_users 还是空表时（系统首次启用），第一个注册的人
 -- 不看邀请码，直接设为『老板』（配合前端的首次引导）。
+-- 例外 2：yxchong3@gmail.com（老板本人）永远免邀请码，直接设为『老板』。
 --
 -- 邀请码对照表（如需改邀请码，改下面 case 里的字符串即可）：
 --   tcymgmt888 → area     (区域副经理)
 --   bfmgr888   → manager  (店面经理)
 --   chef888    → headchef (厨师长)
 --   bfstaff888 → staff    (员工)
-create or replace function public.handle_new_user_invite()
+--
+-- ⚠️ 2026-09-19 发现：牛室这个正式项目里，`auth.users` 上早就绑了一个触发器
+-- `on_auth_user_created`（对应函数 `handle_new_user`），跟这里写的完全是两套
+-- 独立逻辑——而且它认的邀请码是 'bmr888'/'BHMGR888'/'BHSTAFF123' 这种跟本备忘
+-- 完全对不上的旧词，任何对不上的邀请码它都默默给 staff（不会拒绝）。
+-- 所以这里**直接复用 `handle_new_user` 这个既有的函数名**覆盖掉旧逻辑，
+-- 不再另外建一个 `on_auth_user_created_invite` 新触发器——避免同一张表上
+-- 挂两个触发器、两套邀请码规则并存导致以后又搞不清楚是谁在生效。
+create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer
@@ -88,35 +118,41 @@ as $$
 declare
   v_code text := coalesce(new.raw_user_meta_data->>'invite_code','');
   v_role text;
+  v_email text := lower(new.email);
+  v_code_exempt_emails text[] := array['yxchong3@gmail.com']; -- 免邀请码白名单（如老板本人账号）
 begin
-  v_role := case v_code
-    when 'tcymgmt888' then 'area'
-    when 'bfmgr888'   then 'manager'
-    when 'chef888'    then 'headchef'
-    when 'bfstaff888' then 'staff'
-    else null
-  end;
+  if v_email = any(v_code_exempt_emails) then
+    v_role := 'owner';
+  else
+    v_role := case v_code
+      when 'tcymgmt888' then 'area'
+      when 'bfmgr888'   then 'manager'
+      when 'chef888'    then 'headchef'
+      when 'bfstaff888' then 'staff'
+      else null
+    end;
 
-  if v_role is null then
-    if not exists (select 1 from public.erp_users) then
-      v_role := 'owner';  -- 白名单为空 → 首位注册者自动成为老板，不检查邀请码
-    else
-      raise exception '邀请码无效或未填写，请向管理员索取正确的邀请码后再注册';
+    if v_role is null then
+      if public.erp_users_is_empty() then
+        v_role := 'owner';  -- 白名单为空 → 首位注册者自动成为老板，不检查邀请码
+      else
+        raise exception '邀请码无效或未填写，请向管理员索取正确的邀请码后再注册';
+      end if;
     end if;
   end if;
 
-  insert into public.erp_users (email, name, role, outlet, active)
-  values (lower(new.email), split_part(new.email,'@',1), v_role, 'b1', true)
+  insert into public.erp_users (email, name, role, outlet, active, created_at)
+  values (lower(new.email), split_part(new.email,'@',1), v_role, 'b1', true, now())
   on conflict (email) do update set role = excluded.role, active = true;
 
   return new;
 end;
 $$;
 
-drop trigger if exists on_auth_user_created_invite on auth.users;
-create trigger on_auth_user_created_invite
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
   after insert on auth.users
-  for each row execute function public.handle_new_user_invite();
+  for each row execute function public.handle_new_user();
 
 -- ============================================================
 -- 首次使用：

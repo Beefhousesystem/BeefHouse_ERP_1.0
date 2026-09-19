@@ -616,7 +616,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0919a";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0919b";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -4064,7 +4064,8 @@ async function doAuthSignup(){
     if(m) m.innerHTML = '▲ 请输入邮箱和密码（至少6位）';
     return;
   }
-  if(!code){
+  const codeExemptEmails=['yxchong3@gmail.com']; // 免邀请码白名单（如老板本人账号）
+  if(!code && !codeExemptEmails.includes(email.toLowerCase())){
     if(m) m.innerHTML = '▲ 请输入邀请码 / 口令（向管理员索取，首次注册必填）';
     return;
   }
