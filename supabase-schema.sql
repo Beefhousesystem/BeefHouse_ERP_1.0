@@ -101,7 +101,15 @@ create policy "erp_users admin or bootstrap write"
 --   bfmgr888   → manager  (店面经理)
 --   chef888    → headchef (厨师长)
 --   bfstaff888 → staff    (员工)
-create or replace function public.handle_new_user_invite()
+--
+-- ⚠️ 2026-09-19 发现：牛室这个正式项目里，`auth.users` 上早就绑了一个触发器
+-- `on_auth_user_created`（对应函数 `handle_new_user`），跟这里写的完全是两套
+-- 独立逻辑——而且它认的邀请码是 'bmr888'/'BHMGR888'/'BHSTAFF123' 这种跟本备忘
+-- 完全对不上的旧词，任何对不上的邀请码它都默默给 staff（不会拒绝）。
+-- 所以这里**直接复用 `handle_new_user` 这个既有的函数名**覆盖掉旧逻辑，
+-- 不再另外建一个 `on_auth_user_created_invite` 新触发器——避免同一张表上
+-- 挂两个触发器、两套邀请码规则并存导致以后又搞不清楚是谁在生效。
+create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer
@@ -125,7 +133,7 @@ begin
     end;
 
     if v_role is null then
-      if not exists (select 1 from public.erp_users) then
+      if public.erp_users_is_empty() then
         v_role := 'owner';  -- 白名单为空 → 首位注册者自动成为老板，不检查邀请码
       else
         raise exception '邀请码无效或未填写，请向管理员索取正确的邀请码后再注册';
@@ -133,18 +141,18 @@ begin
     end if;
   end if;
 
-  insert into public.erp_users (email, name, role, outlet, active)
-  values (lower(new.email), split_part(new.email,'@',1), v_role, 'b1', true)
+  insert into public.erp_users (email, name, role, outlet, active, created_at)
+  values (lower(new.email), split_part(new.email,'@',1), v_role, 'b1', true, now())
   on conflict (email) do update set role = excluded.role, active = true;
 
   return new;
 end;
 $$;
 
-drop trigger if exists on_auth_user_created_invite on auth.users;
-create trigger on_auth_user_created_invite
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
   after insert on auth.users
-  for each row execute function public.handle_new_user_invite();
+  for each row execute function public.handle_new_user();
 
 -- ============================================================
 -- 首次使用：

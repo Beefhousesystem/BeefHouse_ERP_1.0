@@ -81,7 +81,12 @@
 | 厨师长 | `chef888` |
 | 员工 | `bfstaff888` |
 
-✅ **2026-09-19 更新**：邀请码判定逻辑已写进 `supabase-schema.sql`（第 3 部分 `handle_new_user_invite` 触发器），需要去 Supabase SQL Editor 手动跑一遍脚本才会生效。跑之前发现：`erp_users` 白名单原本谁都能自动加入（默认给 staff），邀请码栏其实没被校验——已修正为**邀请码错误/没填直接拒绝注册**（首位老板注册例外，走白名单为空自动引导）。前端 (`index.html` 的 `doAuthSignup`) 也加了「必填」校验，不填不给交。
+✅ **2026-09-19 更新**：邀请码判定逻辑已写进 `supabase-schema.sql`（第 3 部分，函数名 `handle_new_user`，绑在 `on_auth_user_created` 触发器上），需要去 Supabase SQL Editor 手动跑一遍脚本才会生效。前端 (`index.html` 的 `doAuthSignup`) 也加了「必填」校验，不填不给交。
+🐛 **踩过的坑（关键）**：牛室这个正式 Supabase 项目里，**`auth.users` 早就绑了一个同名触发器 `on_auth_user_created`（函数 `handle_new_user`）**，是这次对话之前就已经存在的旧逻辑——它认的邀请码是 `bmr888` / `BHMGR888` / `BHSTAFF123` 这种跟本备忘完全对不上的词，而且**任何邀请码填错/填了不认识的词，它都默默给 staff，不会拒绝**。一开始我们另外新建了一个名字不同的触发器 `on_auth_user_created_invite`，结果实际生效的还是旧的那个（新的建立指令当时没跑到/没生效），导致填对邀请码也还是被分配成 staff。**最终修法：直接把 `handle_new_user` 这个既有函数的内容覆盖成正确逻辑，不再另外建新触发器**——如果你之后又发现邀请码不生效，第一件事就是去查 `auth.users` 上实际绑的是哪个触发器、对应哪个函数，不要假设一定是本文件里这份在跑：
+```sql
+select tgname, proname from pg_trigger t join pg_proc p on t.tgfoid=p.oid
+where tgrelid='auth.users'::regclass and not t.tgisinternal;
+```
 ✅ **免邀请码例外**：`yxchong3@gmail.com`（老板本人）注册时永远免填邀请码、直接给『老板』角色——前端 `codeExemptEmails` 和后台触发器 `v_code_exempt_emails` 两处都要同步改（目前只放了这一个邮箱，之后如需再加免邀请码账号，两处都要加）。
 ⚠️ 复制给明记时，明记要用**自己的邀请码**（配合明记自己独立的 Supabase 项目），触发器里的 `case` 对照表和免邀请码邮箱清单也要换成明记的一套，不要沿用牛室这组。
 🐛 **踩过的坑（2026-09-19）**：`erp_is_admin()` 一开始写成 `language sql`，导致登录时 `select * from erp_users` 报 `42P17 infinite recursion detected in policy for relation "erp_users"`（500 错误，网页显示"白名单表尚未建立"）——原因是 sql 函数会被规划器内联展开，函数内部又查 `erp_users` 本身，被判定成策略里查自己触发死循环。改成 `language plpgsql` 后还没完全好，因为策略里**还直接裸写了一句 `not exists (select 1 from public.erp_users)`**（判断白名单是否为空），同样的坑犯了两次——同样会被内联触发递归。**最终把这句也包进一个 `erp_users_is_empty()` 的 plpgsql 函数**才彻底解决。**教训**：任何 RLS 策略的 `using`/`with check` 里，只要会查到「策略所在的那张表本身」，不管是直接写裸查询还是包在函数里，都必须用 `language plpgsql`（不能是 `language sql`），逐条检查，不要漏掉任何一处裸查询。
