@@ -2,7 +2,8 @@
 -- 牛室炙烤牛排 · Supabase 建表脚本
 -- 用法：Supabase 控制台 → SQL Editor → New query → 粘贴全部 → Run
 -- 已经跑过第 1 版的，只需再跑「第 2 部分」即可（重复运行安全）。
--- 2026-09 更新：erp_users 写入策略收紧为「仅老板/区域副经理」，重新跑一次本脚本即可生效。
+-- 2026-09 更新：erp_users 写入策略收紧为「仅老板/人事经理/区域副经理」；erp_store 按分店
+-- 隔离 + 薪资单独上锁；新增「人事经理」角色。重新跑一次本脚本即可生效。
 -- ============================================================
 
 -- ========== 第 1 部分：业务数据表 erp_store ==========
@@ -43,7 +44,7 @@ create policy "erp_users authed read"
   on public.erp_users for select
   to authenticated using (true);
 
--- 写入收紧：只有「老板/区域副经理」才能改白名单（新增/停用员工、改角色）。
+-- 写入收紧：只有「老板/人事经理/区域副经理」才能改白名单（新增/停用员工、改角色）。
 -- 例外：首次使用、白名单还是空表时放行——让第一个注册的人能被设为老板（配合 App 的自动引导）。
 -- ⚠️ 这个函数必须是 language plpgsql（不能用 language sql）：sql 函数会被规划器内联展开，
 -- 而它内部又查询 erp_users 本身，会被判定成「策略里查自己的表」触发
@@ -60,7 +61,7 @@ begin
   return exists (
     select 1 from public.erp_users u
     where u.email = auth.jwt()->>'email'
-      and u.role in ('owner','area')
+      and u.role in ('owner','hrmanager','area')
       and u.active
   );
 end;
@@ -157,12 +158,20 @@ create trigger on_auth_user_created
 -- ========== 第 4 部分：erp_store 按分店隔离 + 薪资单独上锁 ==========
 -- 背景：erp_store 原本是「只要登录就能读写全部 key」，等于任何一个员工账号
 -- 都能在浏览器里直接读到所有分店的全部业务数据。这里改成：
---   · 一般业务数据（erpv2:<outletId>）：只有本人所属分店 + 老板/区域副经理(全分店角色)能读写。
---   · erpv2:roleperms（权限配置）：任何登录用户可读，只有老板/区域副经理能写。
---   · erpv2:payroll:<outletId>（薪资，2026-09-19 起单独拆分出来）：只有老板/区域副经理能读写，
---     其余角色（含本店店长/厨师长/员工）一律不给，从数据库层面彻底挡住直接翻薪资源数据。
+--   · 一般业务数据（erpv2:<outletId>）：只有本人所属分店 + 老板/人事经理/区域副经理(全分店角色)能读写。
+--   · erpv2:roleperms（权限配置）：任何登录用户可读，只有老板/人事经理/区域副经理能写。
+--   · erpv2:payroll:<outletId>（薪资发放的月度计算结果，2026-09-19 起单独拆分出来）：只有
+--     老板/人事经理能读，其余角色（含区域副经理、本店店长/厨师长/员工）一律不给读；
+--     只有人事经理能写（老板也不给写，配合前端 canRunPayroll 锁死）。
 -- ⚠️ 同上面 erp_is_admin 的教训：这里查 erp_users 的函数不会造成递归（erp_store 和 erp_users
 -- 是两张不同的表），但仍统一用 language plpgsql 写，保持风格一致、也更保险。
+-- ⚠️ 已知限制：员工每人的底薪/津贴等字段目前还是存在 erpv2:<outletId> 主档案里的 staff
+-- 数组中（不在这个新拆出来的 payroll key 里），而本店店长现在按需求要能看到「本店每个人的
+-- 薪资明细」，所以本店主档案的读取权限一样开给同店的店长/厨师长/员工——也就是说，
+-- 一个技术熟悉的厨师长/员工理论上仍可能在浏览器里翻到同店其他同事的底薪字段
+-- （UI 上「只看自己」目前也还没做，因为 currentEmpId() 还是写死的，见 CLAUDE.md 记录）。
+-- 要彻底堵住这个洞，需要把员工的底薪/津贴等敏感字段也搬出主档案、单独配一把只认
+-- "本人" 的锁，是比这次更大的一次改动，先记录着，未来排期再做。
 create or replace function public.erp_can_read_key(k text)
 returns boolean
 language plpgsql
@@ -188,10 +197,10 @@ begin
   end if;
 
   if k like 'erpv2:payroll:%' then
-    return v_role in ('owner','area'); -- 薪资：只有全权角色能读，员工/店长/厨师长一律不给
+    return v_role in ('owner','hrmanager'); -- 薪资发放计算结果：只有老板/人事经理能读，区域副经理/店长/厨师长/员工一律不给
   end if;
 
-  if v_role in ('owner','area') then
+  if v_role in ('owner','hrmanager','area') then
     return true; -- 全分店角色，其余业务数据都能看
   end if;
 
@@ -206,12 +215,16 @@ security definer
 stable
 set search_path = public
 as $$
+declare
+  v_email text := auth.jwt()->>'email';
+  v_role text;
 begin
   if k = 'erpv2:roleperms' then
-    return public.erp_is_admin(); -- 权限配置只有老板/区域副经理能改
+    return public.erp_is_admin(); -- 权限配置：老板/人事经理/区域副经理能改
   end if;
   if k like 'erpv2:payroll:%' then
-    return public.erp_is_admin(); -- 薪资写入同样只给老板/区域副经理
+    select role into v_role from public.erp_users where email = v_email and active;
+    return v_role = 'hrmanager'; -- 薪资发放写入锁死给唯一角色：人事经理（连老板都不给写，配合前端 canRunPayroll）
   end if;
   return public.erp_can_read_key(k); -- 其余业务数据：能读的分店范围内也能写(配合本店日常操作)
 end;
