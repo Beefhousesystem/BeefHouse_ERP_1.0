@@ -144,3 +144,9 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 - 提交信息用中文、清楚描述改动。
 - **拖动排序统一风格**：全系统用 ☰ 拖动手柄排序(触屏+鼠标)，不用一步步 ↑↓。通用工具 `makeSortable`/`wireSortables`/`SORT_HANDLERS`(render 与 openForm 后自动接线)。做任何「可排序列表」都用它：容器加 `data-sort="<类型>"`(+ 上下文 `data-*`)、子行加 `data-sortid` 与一个 `.draghandle`，并在 `SORT_HANDLERS` 注册该类型的落点回调(收到新顺序 ids → 重排数据 → save → 重绘)。已用于：进货单/月末盘点品项行(data-sort="grid")、职位/国籍管理(data-sort="list")。
 - 复制到明记需一并带上的文件：`index.html` + `CLAUDE.md` + `order-data.js` + `sw.js` + `manifest.webmanifest` + `icon-192.png` + `icon-512.png`（以及 `supabase/` 下的推送函数与 SQL，如明记要用推送）。
+
+## 新增「运营开销记录」逐笔日志（2026-09-22）
+「采购进销」作业中心新增一张卡片 **🧾运营开销记录**（页面 key `opexlog`），跟既有的「运营开销录入(opexm)」是两回事：opexm 是每月一个总数的录入表，`opexlog` 是**逐笔**记录（发票级别），方便留存明细/日后核对。
+- 字段：日期、类别(下拉)、Invoice No.、金额、备注。类别下拉 7 项，跟 `pgOpex()` 里原本就有的 OpEx 科目对应（`opexLogCats()` 函数）：营销与广告(marketing)、维修与保养(maintenance)、Wi-Fi(wifi)、垃圾清理(rubbish)、POS 月租(possaas)、会计费(accounting)、维修(repair)。
+- 数据存 `d().opexLog`（新数组，按 `flatMonthTabs` 分月查看，同报废损耗/招待赠送的既有模式）。写入权限沿用 `opex` 模块权限(`PROC_SUB.opexlog='opex'`)，即能碰运营开销的角色（老板/人事经理/区域副经理/店长/中央经理）都能用。
+- ⚠️ **目前只是记录/留痕，不会自动加总进 `pgOpex()` 月度总数**——那边的营销/维修/杂费栏位还是要手动填数字（或以后可以再做一个"从运营开销记录汇总填入"的同步按钮，类似 `payrollLabour()` 那套自动同步的做法，这次先没做，避免打乱既有输入习惯）。
