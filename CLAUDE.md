@@ -155,3 +155,7 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
   - 月末已锁定的月份跳过自动同步（`applyOpexLogSync` 内部检查 `monthLocked()`，锁定月不再改动已归档数据）。
   - 两个页面仍保留「已同步/不一致」的提示条（不一致通常代表该月已锁定、或改动前的历史数据还没被自动同步覆盖过）。
   - ⚠️ **这只对之后的新增/编辑/删除生效**：功能上线前如果已经手动同步过的月份数据不受影响；没做"一次性把所有历史月份重新同步一遍"，避免不小心覆盖掉业主手动调整过的旧月份数字。
+- ✅ **2026-09-24 三次更新：营销/维修/杂费这 7 项在「运营开销录入」和「运营开销」编辑弹窗里都改成锁住(disabled)，不能手动 key in 了**——业主明确要求"这7样不需要自己另外key in"，完全靠「运营开销记录」逐笔登记自动带过来。具体改动：
+  - `pgOpexM()` 单月录入页：`rows.map` 判断 `OPEXLOG_SYNC_KEYS.includes(k)`，命中就加 🔗 角标、`disabled`、灰底显示；`saveOpexM()` 保存时也直接跳过这些 key，不会读取（就算被 disabled，直接用 JS 读 `.value` 理论上还是读得到，所以用 `.filter()` 白名单排除，双重保险）。
+  - `openM('opex')` 那个更底层的原始编辑弹窗（`Object.entries(curOpex(...))` 逐一生成 input，`saveOpex()` 保存）**一开始漏掉了、没跟着锁**——这个弹窗本来是可以绕过 opexm 页面直接改任何 key 的旧入口，这次一并补上同样的 disabled + 排除逻辑，两个编辑入口现在行为一致。
+  - 租金(rent/commission)、水电煤气(electricity/water/gas)这 5 项完全不受影响，两个编辑入口都还是正常可以手动改。
