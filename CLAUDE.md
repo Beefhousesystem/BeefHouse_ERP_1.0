@@ -159,3 +159,11 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
   - `pgOpexM()` 单月录入页：`rows.map` 判断 `OPEXLOG_SYNC_KEYS.includes(k)`，命中就加 🔗 角标、`disabled`、灰底显示；`saveOpexM()` 保存时也直接跳过这些 key，不会读取（就算被 disabled，直接用 JS 读 `.value` 理论上还是读得到，所以用 `.filter()` 白名单排除，双重保险）。
   - `openM('opex')` 那个更底层的原始编辑弹窗（`Object.entries(curOpex(...))` 逐一生成 input，`saveOpex()` 保存）**一开始漏掉了、没跟着锁**——这个弹窗本来是可以绕过 opexm 页面直接改任何 key 的旧入口，这次一并补上同样的 disabled + 排除逻辑，两个编辑入口现在行为一致。
   - 租金(rent/commission)、水电煤气(electricity/water/gas)这 5 项完全不受影响，两个编辑入口都还是正常可以手动改。
+
+## 上线前完整性/安全性复查（2026-09-24，BUILD 0924e）
+业主要求上线前把系统完整性和安全性再全面检查一遍。逐项核对了 RLS 函数(`erp_is_admin`/`erp_users_is_empty`/`erp_can_read_key`/`erp_can_write_key` 均为 `plpgsql`，无遗留 `sql` 语言递归隐患)、`handle_new_user()` 邀请码判定(精确匹配+未匹配拒绝注册)、`ROLES` 权限一致性(全文件 `['owner','area']` 已全部补上 `hrmanager`，无遗漏)、`payrun`/`payroll` 相关的 `canRunPayroll` 门禁、`save()`/`loadDB()` 的 payroll 拆分存储、密钥(确认全文件只有 publishable anon key，无 service_role/密码/token 硬编码)、以及全部 `<script>` 区块语法检查，结果均正常。
+
+**发现并修复一个上线前会导致功能失效的漏洞**：`erp_can_read_key`/`erp_can_write_key`（`supabase-schema.sql`）原本只对 `erpv2:roleperms`、`erpv2:payroll:%` 两种 key 做特殊处理，其余 key 一律走「必须等于 `erpv2:<自己所属分店>`」的分店隔离规则。但 `订货单` 功能（`index.html` 的 `loadOrders`/`saveOrders`）用的是**全店共用的单一全局 key** `erpv2:orders`（不是 per-outlet），并不符合 `erpv2:<outlet>` 这个格式——导致**店长/厨师长/中央经理/中央员工**（App 前端本来就允许他们进「订单发票」「央厨订货」）在实际连 Supabase 时，RLS 会拒绝他们读写 `erpv2:orders`，只有老板/人事经理/区域副经理能用（他们走的是"全分店角色"分支，不受此限）。
+- **修法**：在 `erp_can_read_key` 里给 `erpv2:orders` 单独开一条規則——`return true`（跟 `roleperms` 一样，任何已登录白名单用户都能读），因为订货单本来就是"实时模板，各分店都要下单/看单"（性质上跟按分店隔离的业务数据不同）。`erp_can_write_key` 没有 `erpv2:orders` 的特判，会自动 fallthrough 到 `erp_can_read_key` 的结果，所以同一条改动同时解锁了读和写，不需要额外改。
+- ⚠️ **这条 SQL 改动需要业主去 Supabase SQL Editor 重新跑一遍 `erp_can_read_key` 那个 `create or replace function`**（或整个 `supabase-schema.sql`）才会在正式环境生效，光改这份仓库文件不会自动同步到已经上线的 Supabase 项目。
+- 复制给明记时：如果明记的订货单也是全店共用单一 key，要记得同样加这条特判；如果明记的订货单本来就是 per-outlet 存储，就不需要这条。
