@@ -626,7 +626,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0922a";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0924a";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -1966,11 +1966,13 @@ function pgOpex(){
   const labourKeys=["salaries","epf","socso","eis","levy","ot"];
   const pl=payrollLabour();const plMap={salaries:pl.salaries,epf:pl.epf,socso:pl.socso,eis:pl.eis,levy:pl.levy,ot:pl.ot};
   const labourSynced=labourKeys.every(k=>Math.round((+o[k]||0))===Math.round((plMap[k]||0)));
-  return `<div class="fb"><h2 class="h" style="margin:0;">💵 ${LANG==="zh"?"运营开销 OpEx":"Operating Expenses"} <span class="tag">${monthLabel2(m)}${locked?' 🔒':''}</span></h2>${canW('opex')&&canSeeSalary()&&!locked?`<div style="display:flex;gap:6px;"><button class="btn ghost sm" onclick="syncOpexFromPayroll()">🔗 ${LANG==="zh"?"同步人事薪资":"Sync Payroll"}</button><button class="btn gold sm" onclick="openM('opex')">✎ ${LANG==="zh"?"编辑":"Edit"}</button></div>`:''}</div>
+  const logMap=opexLogTotals(m);const logSum=Object.values(logMap).reduce((s,v)=>s+v,0);const logSynced=opexLogSynced(m);
+  return `<div class="fb"><h2 class="h" style="margin:0;">💵 ${LANG==="zh"?"运营开销 OpEx":"Operating Expenses"} <span class="tag">${monthLabel2(m)}${locked?' 🔒':''}</span></h2>${canW('opex')&&!locked?`<div style="display:flex;gap:6px;flex-wrap:wrap;">${canSeeSalary()?`<button class="btn ghost sm" onclick="syncOpexFromPayroll()">🔗 ${LANG==="zh"?"同步人事薪资":"Sync Payroll"}</button>`:''}${logSum?`<button class="btn ghost sm" onclick="syncOpexFromLog()">🔗 ${LANG==="zh"?"同步运营开销记录":"Sync OpEx Log"}</button>`:''}<button class="btn gold sm" onclick="openM('opex')">✎ ${LANG==="zh"?"编辑":"Edit"}</button></div>`:''}</div>
   <div class="seg" style="margin-bottom:8px;flex-wrap:wrap;">${availMonths().map(mm=>`<button class="${mm===m?'active':''}" onclick="setCostMonth('${mm}')">${monthLabel2(mm)}${monthLocked(mm)?' 🔒':''}</button>`).join('')}</div>
   <div class="hint">${LANG==="zh"?"运营开销按自然月独立核算，直接带入该月损益与净利。人工成本随『人事薪资』自动联动（也可手动改）。":"Per-month OpEx feeds that month's P&L. Labour auto-links to Payroll."}${hideSalary?(LANG==="zh"?" ⚠️ 你的角色只能看人工总数。":" ⚠️ Labour total only."):""}</div>
   ${locked?`<div class="al al-b" style="margin-bottom:8px;"><div class="t">🔒 ${LANG==="zh"?monthLabel2(m)+" 已月末锁定":"Locked"}</div>${LANG==="zh"?"该月开销已归档固定；如需修改请到『月度核算』解锁。":"Archived; unlock in Monthly."}</div>`:`<div class="hint" style="margin-bottom:8px;">${own?(LANG==="zh"?"📌 本月为专属开销（与其他月独立）。":"📌 Month-specific."):(LANG==="zh"?"📄 本月沿用默认开销；一旦编辑/同步即建立本月专属副本。":"📄 Using default template.")}</div>`}
   ${(!hideSalary&&canSeeSalary())?`<div class="al ${labourSynced?'al-b':'al-a'}" style="margin-bottom:8px;"><div class="t">${labourSynced?('🔗 '+(LANG==="zh"?"人工成本 已与人事薪资一致":"Labour matches payroll")):('⚠️ '+(LANG==="zh"?"人工成本与人事薪资不一致":"Labour differs from payroll"))}</div>${LANG==="zh"?"人事薪资实际：薪资"+money(pl.salaries)+" · OT"+money(pl.ot)+" · EPF"+money(pl.epf)+" · SOCSO"+money(pl.socso)+" · EIS"+money(pl.eis)+" · 人头税"+money(pl.levy)+(labourSynced?"":"　→ 点『🔗同步人事薪资』填入"):""}</div>`:''}
+  ${logSum?`<div class="al ${logSynced?'al-b':'al-a'}" style="margin-bottom:8px;"><div class="t">${logSynced?('🔗 '+(LANG==="zh"?"营销/维修/杂费 已与运营开销记录一致":"Marketing/Maintenance/Misc matches the OpEx Log")):('⚠️ '+(LANG==="zh"?"营销/维修/杂费与运营开销记录不一致":"Marketing/Maintenance/Misc differs from the OpEx Log"))}</div>${LANG==="zh"?"运营开销记录合计："+money(logSum)+(logSynced?"":"　→ 点『🔗同步运营开销记录』填入"):""}</div>`:''}
   ${groups.map(([g,rows])=>{
     const isLabour=rows.some(([k])=>labourKeys.includes(k));
     const gtotal=rows.reduce((s,[k])=>s+(+o[k]||0),0);
@@ -1980,7 +1982,12 @@ function pgOpex(){
         <div class="row"><span class="mini">${LANG==="zh"?"🔒 个别项目已隐藏（权限限制）":"🔒 Breakdown hidden"}</span><span></span></div></div>`;
     }
     return `<h2 class="h">${g} <span class="tag">${money(gtotal)}</span></h2>
-    <div class="pl">${rows.map(([k,z,e])=>{const linked=labourKeys.includes(k);const ref=plMap[k];const diff=linked&&Math.round((+o[k]||0))!==Math.round(ref||0);return `<div class="row"><span>${LANG==="zh"?z:e}${linked?` <span class="pill p-b" title="${LANG==="zh"?"可从人事薪资联动":"payroll-linked"}">🔗</span>`:''}</span><b${diff?' style="color:var(--amber)"':''}>${money(o[k])}${diff?`<br><span class="mini">${LANG==="zh"?"薪资":"HR"} ${money(ref)}</span>`:''}</b></div>`;}).join('')}</div>`;
+    <div class="pl">${rows.map(([k,z,e])=>{
+      const linkedPay=labourKeys.includes(k);const linkedLog=OPEXLOG_SYNC_KEYS.includes(k);
+      const ref=linkedPay?plMap[k]:(linkedLog?logMap[k]:undefined);
+      const diff=linkedPay?Math.round((+o[k]||0))!==Math.round(ref||0):(linkedLog&&ref>0&&Math.round((+o[k]||0))!==Math.round(ref));
+      const linked=linkedPay||linkedLog;
+      return `<div class="row"><span>${LANG==="zh"?z:e}${linked?` <span class="pill p-b" title="${linkedPay?(LANG==="zh"?"可从人事薪资联动":"payroll-linked"):(LANG==="zh"?"可从运营开销记录汇总":"opex-log linked")}">🔗</span>`:''}</span><b${diff?' style="color:var(--amber)"':''}>${money(o[k])}${diff?`<br><span class="mini">${linkedPay?(LANG==="zh"?"薪资":"HR"):(LANG==="zh"?"记录":"Log")} ${money(ref)}</span>`:''}</b></div>`;}).join('')}</div>`;
   }).join('')}
   <div class="pl" style="margin-top:12px;"><div class="row tot"><span>${LANG==="zh"?"每月 OpEx 总额":"Total OpEx"}</span><span>${money(total)}</span></div></div>`;
 }
@@ -2085,6 +2092,21 @@ async function syncOpexFromPayroll(){
   if(!confirm(LANG==="zh"?("用人事薪资的实际数据填入【"+monthLabel2(costMonth)+"】运营开销的人工成本（薪资/EPF/SOCSO/EIS/人头税/OT）？之后仍可手动微调。"):"Fill labour OpEx from payroll?"))return;
   const pl=payrollLabour();const o=materializeOpex(costMonth);applyLabour(o,pl);applyLabour(opexTemplate(),pl);
   auditLog("同步人工成本","人事薪资→OpEx "+monthLabel2(costMonth),"",money(pl.salaries+pl.ot+pl.epf+pl.socso+pl.eis+pl.levy));await save();render();}
+/* 运营开销记录(opexLog) → 汇总填入当月 OpEx 的营销/维修/杂费栏位 */
+const OPEXLOG_SYNC_KEYS=["marketing","maintenance","wifi","rubbish","possaas","accounting","repair"];
+function opexLogTotals(month){
+  const t=Object.fromEntries(OPEXLOG_SYNC_KEYS.map(k=>[k,0]));
+  (d().opexLog||[]).filter(r=>(r.date||'').slice(0,7)===month).forEach(r=>{if(t.hasOwnProperty(r.cat))t[r.cat]+=(+r.amount||0);});
+  return t;
+}
+function opexLogSynced(month){const o=curOpex(month);const t=opexLogTotals(month);return OPEXLOG_SYNC_KEYS.every(k=>Math.round((+o[k]||0))===Math.round(t[k]||0));}
+async function syncOpexFromLog(){
+  if(monthLocked(costMonth))return alert(LANG==="zh"?"本月已月末锁定，请先解锁再同步。":"Month is locked.");
+  const t=opexLogTotals(costMonth);const sum=Object.values(t).reduce((s,v)=>s+v,0);
+  if(!sum)return alert(LANG==="zh"?"本月「运营开销记录」里没有可汇总的金额。":"No OpEx log amounts for this month.");
+  if(!confirm(LANG==="zh"?("用「运营开销记录」【"+monthLabel2(costMonth)+"】的合计金额，覆盖运营开销的营销/维修/杂费栏位（共 "+money(sum)+"）？之后仍可手动微调。"):"Fill Marketing/Maintenance/Misc OpEx from the log totals ("+money(sum)+")?"))return;
+  const o=materializeOpex(costMonth);OPEXLOG_SYNC_KEYS.forEach(k=>{o[k]=t[k];});
+  auditLog("同步运营开销记录","运营开销记录→OpEx "+monthLabel2(costMonth),"",money(sum));await save();render();}
 function pgPayroll(){
   const x=d();const allStaff=x.staff||[];
   const scope=salaryScope(); // full / total / self
