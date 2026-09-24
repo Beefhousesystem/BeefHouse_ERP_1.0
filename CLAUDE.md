@@ -149,4 +149,7 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 「采购进销」作业中心新增一张卡片 **🧾运营开销记录**（页面 key `opexlog`），跟既有的「运营开销录入(opexm)」是两回事：opexm 是每月一个总数的录入表，`opexlog` 是**逐笔**记录（发票级别），方便留存明细/日后核对。
 - 字段：日期、类别(下拉)、Invoice No.、金额、备注。类别下拉 7 项，跟 `pgOpex()` 里原本就有的 OpEx 科目对应（`opexLogCats()` 函数）：营销与广告(marketing)、维修与保养(maintenance)、Wi-Fi(wifi)、垃圾清理(rubbish)、POS 月租(possaas)、会计费(accounting)、维修(repair)。
 - 数据存 `d().opexLog`（新数组，按 `flatMonthTabs` 分月查看，同报废损耗/招待赠送的既有模式）。写入权限沿用 `opex` 模块权限(`PROC_SUB.opexlog='opex'`)，即能碰运营开销的角色（老板/人事经理/区域副经理/店长/中央经理）都能用。
-- ⚠️ **目前只是记录/留痕，不会自动加总进 `pgOpex()` 月度总数**——那边的营销/维修/杂费栏位还是要手动填数字（或以后可以再做一个"从运营开销记录汇总填入"的同步按钮，类似 `payrollLabour()` 那套自动同步的做法，这次先没做，避免打乱既有输入习惯）。
+- ✅ **2026-09-24 更新：加了「🔗同步运营开销记录」按钮**（`syncOpexFromLog(month)`），跟 `payrollLabour()` 那套同步逻辑同款：把 `d().opexLog` 当月的 7 类金额加总，一键覆盖填进 `curOpex(month)` 对应栏位。因为 `pgOpex()`（运营开销总览）和 `pgOpexM()`（运营开销录入）读写的是**同一个 `curOpex(month)` 对象**，两个页面本来就是同一份数据、只是两种录入界面，所以按钮**在 `pgOpex()` 和 `pgOpexM()` 单月录入页都放了一个**，两边同步效果一样，点哪边都行。
+  - 只同步 `OPEXLOG_SYNC_KEYS` 这 7 项（marketing/maintenance/wifi/rubbish/possaas/accounting/repair）；**租金(rent/commission)和水电煤气(electricity/water/gas)完全不受影响**，业主明确要求这两组维持纯手动、不跟运营开销记录挂钩。
+  - 只有当月 `opexLog` 有金额时才显示按钮；月末已锁定的月份不给同步；同步前会弹窗显示合计金额，需要确认，且同步后仍可手动微调（不会锁死改不了）。
+  - 两个页面都加了「已同步/不一致」的提示条：营销/维修/杂费栏位跟运营开销记录不一致时会显示黄色警示 + 差额，方便一眼看出手动填的数字有没有跟发票记录对齐。
