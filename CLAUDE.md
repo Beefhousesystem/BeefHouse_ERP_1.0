@@ -205,6 +205,19 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 ## 按 ESC 关闭弹窗（2026-09-25，BUILD 0925m）
 全系统所有表单/清单弹窗（新增/编辑各种记录、订单列表等）都是走同一套 `#mbg`/`#mbox` 弹窗系统(`openForm()`/`closeM()`)。加了一个全局 `keydown` 监听：按 **ESC** 键，如果弹窗正开着(`#mbg` 有 `show` class)就调用 `closeM()` 关掉，跟点右上角「×」效果一样。已用 Playwright 验证：打开弹窗后按 ESC，弹窗正确关闭。
 - 复制给明记时：直接沿用即可，是通用的操作习惯优化。
+
+## 顶栏「分店徽章」与每页标题旁「版本号徽章」互换位置+颜色字体（2026-09-25，BUILD 0925n）
+业主截图圈出两个元素要互换：① 顶部固定栏标题旁原本的**金色版本号徽章**(`v0925m`)；② 每个页面标题旁原本显示的**灰色分店名称标签**（例如「进销存作业 Setapak店」，这个模式几乎每一页都有，共 16 处 `<span class="tag">${nm(outletObj())}</span>`）。
+⚠️ 中途一度誤会成「跟右上角可切换分店的下拉选单互换」，业主澄清**右上角那个下拉选单不要动**——要互换的是上面这两个，已改正。
+
+**改法**：
+1. 顶栏 `.l`（标题旁）新增 `<span id="outletBadge">`，样式改用原本「分店标签」那一套（灰底 `var(--soft)`、灰字 `var(--grey)`、`font-weight:700`），由 `renderTop()` 里 `nm(outletObj())` 即时填入，切换分店会自动更新（原本填版本号的那行代码改成填分店名）。
+2. 全文件 16 处 `<span class="tag">${nm(outletObj())}</span>`（每个页面标题旁显示分店名的固定写法）用脚本整批换成 `<span class="tag" style="background:#F2B417;color:#12203A;font-weight:800;">v${BUILD}</span>`——沿用 `.tag` 的基础形状(padding/圆角/靠右对齐)，但颜色跟粗细换成原本版本徽章那一套(金底、深字、更粗)。
+3. 原本 `<span id="buildBadge">` 整个拿掉（不再存在于顶栏），版本号现在只在每个页面标题旁显示。
+4. 只处理「纯分店名」这一种写法；另外几处「分店名+月份」组合的标签(跨店调拨/报废损耗/招待赠送等页面的 `${nm(outletObj())} · ${monthLabel2(...)}`）不在这次范围内，维持原样不动。
+5. 已用 Playwright 截图确认：顶栏正确显示灰色「Setapak店」徽章，作业中心页面标题旁正确显示金色「v0925m」徽章。
+- 复制给明记时：这是纯外观调整，直接沿用即可。
+
 - 提交信息用中文、清楚描述改动。
 - **拖动排序统一风格**：全系统用 ☰ 拖动手柄排序(触屏+鼠标)，不用一步步 ↑↓。通用工具 `makeSortable`/`wireSortables`/`SORT_HANDLERS`(render 与 openForm 后自动接线)。做任何「可排序列表」都用它：容器加 `data-sort="<类型>"`(+ 上下文 `data-*`)、子行加 `data-sortid` 与一个 `.draghandle`，并在 `SORT_HANDLERS` 注册该类型的落点回调(收到新顺序 ids → 重排数据 → save → 重绘)。已用于：进货单/月末盘点品项行(data-sort="grid")、职位/国籍管理(data-sort="list")。
 - 复制到明记需一并带上的文件：`index.html` + `CLAUDE.md` + `order-data.js` + `sw.js` + `manifest.webmanifest` + `icon-192.png` + `icon-512.png`（以及 `supabase/` 下的推送函数与 SQL，如明记要用推送）。
