@@ -143,6 +143,16 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 - 部署：`git push beefhouse bh-fix5:main`（失败按 2/4/8/16s 退避重试；remote 已迁移到 yxchong3/BeefHouse_ERP_1.0，GitHub Pages live）。
 - ✅ **2026-09-25 更新：改成直接推 `main`，不再走「开分支 → 开 PR → 业主按合并」这一套**——业主要求跟明记那边一样，改完直接自动推送上线，不需要每次都手动合并。之后的改动：改 `index.html`/`CLAUDE.md`/`supabase-schema.sql` → 语法检查 → `git add` + `git commit` + `git push origin main` 直接推 `main`，不建 `claude/*` 分支、不开 PR。业主如果要看某次改动细节，直接看 `git log`/`git show` 即可。
   - ⚠️ 涉及 Supabase RLS/触发器的 SQL 改动（`supabase-schema.sql`），改完仍然要提醒业主去 Supabase SQL Editor 手动跑一遍——这条不受此工作流改变影响，光推 GitHub 不会同步到线上数据库。
+
+## 新增「忘记密码」功能（2026-09-25，BUILD 0925f）
+登录页原本只有登录/注册，没有忘记密码入口——密码忘了只能找业主去 Supabase 后台手动改，很不方便。已加上标准的 Supabase Auth 密码重设流程：
+
+1. **登录页新增「🔑 忘记密码？」链接**（`doForgotPassword()`）：读取登录框已填的邮箱（没填就跳出 `prompt` 问），调用 `_sb.auth.resetPasswordForEmail(email,{redirectTo:本站网址})`——Supabase 会寄一封含重设链接的邮件给该邮箱本人。
+2. **点邮件里的链接跳回本站后**：Supabase JS 客户端会自动解析链接里的令牌、建立一个临时的「恢复中」session，并触发 `onAuthStateChange` 的 `PASSWORD_RECOVERY` 事件——已在 `initCloud()` 里监听这个事件，触发时显示新增的 **`showResetPasswordForm()`**（设定新密码页面：新密码 + 再次确认，两次要一致且至少 6 位）。
+3. 提交后调用 `_sb.auth.updateUser({password:...})`成功即直接 `afterAuth(user)` 让他免登录直接进系统（不用改完密码还要再手动登录一次）。
+4. **开机流程加了一个保护**（`index.html` 最底部的启动 IIFE）：如果网址里带 `type=recovery`（代表是刚点了重设密码链接跳回来），就**不要**走原本「侦测到已登录 session 就直接进系统」那条路，先按住画面等 `PASSWORD_RECOVERY` 事件自己跳出设新密码页面——不然会先闪一下仪表板、才又跳到设密码页，体验很怪。
+5. 这整套完全靠 **Supabase Auth 内建机制**，不需要额外建表/写后端逻辑；前提是 Supabase 项目本身要有寄信服务（用 Supabase 内建的免费寄信额度，或已设定自己的 SMTP）——如果业主反馈"收不到重设密码邮件"，先去 Supabase 控制台 **Authentication → Emails / SMTP Settings** 检查寄信设定，而不是查前端代码。
+6. 复制给明记时：这套忘记密码机制通用，直接沿用即可，不用因店而异调整；但要注意 Supabase 后台 **Authentication → URL Configuration** 里的 Redirect URLs 允许清单要包含明记自己的网址，否则 `resetPasswordForEmail` 的 `redirectTo` 会被 Supabase 拒绝。
 - 提交信息用中文、清楚描述改动。
 - **拖动排序统一风格**：全系统用 ☰ 拖动手柄排序(触屏+鼠标)，不用一步步 ↑↓。通用工具 `makeSortable`/`wireSortables`/`SORT_HANDLERS`(render 与 openForm 后自动接线)。做任何「可排序列表」都用它：容器加 `data-sort="<类型>"`(+ 上下文 `data-*`)、子行加 `data-sortid` 与一个 `.draghandle`，并在 `SORT_HANDLERS` 注册该类型的落点回调(收到新顺序 ids → 重排数据 → save → 重绘)。已用于：进货单/月末盘点品项行(data-sort="grid")、职位/国籍管理(data-sort="list")。
 - 复制到明记需一并带上的文件：`index.html` + `CLAUDE.md` + `order-data.js` + `sw.js` + `manifest.webmanifest` + `icon-192.png` + `icon-512.png`（以及 `supabase/` 下的推送函数与 SQL，如明记要用推送）。

@@ -630,7 +630,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0925e";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0925f";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -994,6 +994,9 @@ function initCloud(){
     if(SUPABASE_URL&&SUPABASE_ANON_KEY&&window.supabase&&window.supabase.createClient){
       _sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
       CLOUD=true;
+      // 忘记密码：用户点了邮件里的重设密码链接、跳回本站时，Supabase 会解析链接里的令牌
+      // 并触发 PASSWORD_RECOVERY 事件——不管走哪种链接格式(#access_token=... 或 ?code=...)都会触发。
+      try{_sb.auth.onAuthStateChange((event)=>{if(event==='PASSWORD_RECOVERY')showResetPasswordForm();});}catch(e){}
     }
   }catch(e){CLOUD=false;}
   return CLOUD;
@@ -4178,6 +4181,7 @@ function showAuthLogin(msg){
     <div class="fr" style="text-align:left;margin-bottom:8px;"> <label>邀请码 / 口令 (店长或店员) *</label> <input id="au_code" type="text" placeholder="首次注册必填，向管理员索取" autocomplete="off"> </div>
     <button class="btn block brand" style="margin-top:6px;" onclick="doAuthLogin()">🔓 ${LANG==="zh"?"登录":"Sign In"}</button>
     <button class="btn block ghost" style="margin-top:8px;" onclick="doAuthSignup()">🆕 ${LANG==="zh"?"首次使用？注册账号":"First time? Sign Up"}</button>
+    <div style="margin-top:10px;"><a href="#" onclick="event.preventDefault();doForgotPassword();" class="mini" style="color:var(--gold);font-weight:700;">🔑 ${LANG==="zh"?"忘记密码？":"Forgot password?"}</a></div>
     <div id="au_msg" class="mini" style="margin-top:10px;min-height:16px;"></div>
     <div class="mini" style="margin-top:8px;line-height:1.5;">🔒 ${LANG==="zh"?"仅白名单邮箱可进入；未登录无法读取任何数据。岗位与分店由管理员分配。":"Whitelist-only. Role & branch assigned by admin."}</div>
   </div>`;
@@ -4273,6 +4277,48 @@ async function afterAuth(user){
 }
 async function authLogout(){try{if(AUTH())await _sb.auth.signOut();}catch(e){}curUser=null;showAuthLogin();}
 
+/* ---- 忘记密码：发重设邮件 → 用户点邮件里的链接跳回来 → onAuthStateChange 触发 PASSWORD_RECOVERY → 设新密码 ---- */
+async function doForgotPassword(){
+  if(!AUTH()){alert(LANG==="zh"?"未连接云端，无法使用忘记密码功能。":"Cloud not configured.");return;}
+  const m=document.getElementById('au_msg');
+  const email=(fv('au_email')||prompt(LANG==="zh"?"请输入你的登录邮箱，我们会发一封重设密码的邮件给你：":"Enter your account email to receive a reset link:")||'').trim().toLowerCase();
+  if(!email){return;}
+  if(m)m.textContent=LANG==="zh"?"发送中…":"Sending…";
+  try{
+    const {error}=await _sb.auth.resetPasswordForEmail(email,{redirectTo:(location.origin+location.pathname)});
+    if(error){if(m)m.innerHTML='❌ '+error.message;return;}
+    if(m)m.innerHTML='✅ '+(LANG==="zh"?`已发送重设密码邮件到 ${oEsc(email)}，请查收邮件并点击里面的链接。`:`Reset link sent to ${oEsc(email)}. Check your inbox.`);
+  }catch(e){if(m)m.innerHTML='❌ '+(e.message||e);}
+}
+/* ---- 设定新密码（点了邮件链接跳回来后显示此页面）---- */
+function showResetPasswordForm(){
+  document.querySelector('.top').style.display='none';
+  const sb=document.getElementById('sidebar');if(sb)sb.style.display='none';
+  document.getElementById('pageHost').innerHTML=`
+  <div style="width:calc(100% - 32px);max-width:380px;position:fixed;left:50%;top:6vh;transform:translateX(-50%);max-height:88vh;overflow:auto;padding:28px 22px;background:#fff;border:1px solid var(--line);border-radius:16px;text-align:center;">
+    <div style="margin-bottom:10px;"><span class="bh-logo" style="width:118px;height:118px;border-radius:20px;"></span></div>
+    <div style="font-weight:800;font-size:19px;color:var(--ink);">${LANG==="zh"?"设定新密码":"Set New Password"}</div>
+    <div class="mini" style="margin:4px 0 16px;">${LANG==="zh"?"请输入你的新密码":"Enter your new password"}</div>
+    <div class="fr" style="text-align:left;margin-bottom:8px;"><label>${LANG==="zh"?"新密码（至少6位）":"New password (≥6)"}</label><input id="rp_pw1" type="password" placeholder="••••••" autocomplete="new-password"></div>
+    <div class="fr" style="text-align:left;"><label>${LANG==="zh"?"再次输入新密码":"Confirm new password"}</label><input id="rp_pw2" type="password" placeholder="••••••" autocomplete="new-password" onkeydown="if(event.key==='Enter')doResetPassword()"></div>
+    <button class="btn block brand" style="margin-top:12px;" onclick="doResetPassword()">✅ ${LANG==="zh"?"确认更改密码":"Update Password"}</button>
+    <div id="rp_msg" class="mini" style="margin-top:10px;min-height:16px;"></div>
+  </div>`;
+}
+async function doResetPassword(){
+  const pw1=fv('rp_pw1'),pw2=fv('rp_pw2');const m=document.getElementById('rp_msg');
+  if(!pw1||pw1.length<6){if(m)m.innerHTML='⚠️ '+(LANG==="zh"?"密码至少需要6位":"Password must be ≥6 chars");return;}
+  if(pw1!==pw2){if(m)m.innerHTML='⚠️ '+(LANG==="zh"?"两次输入的密码不一致":"Passwords don't match");return;}
+  if(m)m.textContent=LANG==="zh"?"更新中…":"Updating…";
+  try{
+    const {data,error}=await _sb.auth.updateUser({password:pw1});
+    if(error){if(m)m.innerHTML='❌ '+error.message;return;}
+    if(m)m.innerHTML='✅ '+(LANG==="zh"?"密码已更新，正在登录…":"Password updated, signing you in…");
+    const user=data&&data.user;
+    if(user)await afterAuth(user);else showAuthLogin();
+  }catch(e){if(m)m.innerHTML='❌ '+(e.message||e);}
+}
+
 /* ================= 演示登录（无云端时回退）================= */
 function showLogin(){
   if(AUTH()){showAuthLogin();return;}   // 有云端 → 走真实登录
@@ -4318,11 +4364,20 @@ function installApp(){
   try{window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();_deferredPrompt=e;});}catch(e){}
   try{window.addEventListener('click',function(){if(typeof primeAudio==='function')primeAudio();},{once:true});}catch(e){}
   initCloud();
+  // 忘记密码：如果是点了重设密码邮件里的链接跳回来的(URL 带 type=recovery)，
+  // 不要走「有 session 就直接登入」这条路——等 onAuthStateChange 的 PASSWORD_RECOVERY
+  // 事件自己弹出「设定新密码」画面，避免先闪一下仪表板再跳转的怪现象。
+  const isRecoveryLink=/type=recovery/.test(location.hash)||/type=recovery/.test(location.search);
   if(AUTH()){
-    try{const {data}=await _sb.auth.getSession();
-      if(data&&data.session&&data.session.user){await afterAuth(data.session.user);}
-      else{showAuthLogin();}
-    }catch(e){showAuthLogin();}
+    if(isRecoveryLink){
+      document.querySelector('.top').style.display='none';
+      const sb0=document.getElementById('sidebar');if(sb0)sb0.style.display='none';
+    }else{
+      try{const {data}=await _sb.auth.getSession();
+        if(data&&data.session&&data.session.user){await afterAuth(data.session.user);}
+        else{showAuthLogin();}
+      }catch(e){showAuthLogin();}
+    }
   }else{
     await loadDB();await loadRolePerms();showLogin();
   }
