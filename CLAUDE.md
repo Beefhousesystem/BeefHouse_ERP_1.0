@@ -201,6 +201,10 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 4. 已用 Playwright 实测：`setGridQty`+`setGridDayPrice` 正确写入 `qty=10, unitPrice=3.5, price=35`；`avgPurchasePrice` 正确算出 3.5；进货单 HTML 含「数量」「当天价钱」两个输入框和算好的金额；月末盘点 HTML 含「月均价」标签且输入框是 disabled。
 - ⚠️ **已知取舍**：月末盘点如果该品项那个月完全没有走过进货单记录(比如自己库存带过来的、没在系统采购)，月均价会是 0，算出来的月末库存值也会是 0——这是设计上的必然结果(没有进货价格数据可以参考)，如果之后发现某些品项常有这种情况，可以再讨论要不要加一个"手动覆盖"的例外栏位。
 - 复制给明记时：这套"进货单逐日记价、月末盘点抓月均价"的逻辑是通用的核算方式改善，直接沿用即可。
+
+## 按 ESC 关闭弹窗（2026-09-25，BUILD 0925m）
+全系统所有表单/清单弹窗（新增/编辑各种记录、订单列表等）都是走同一套 `#mbg`/`#mbox` 弹窗系统(`openForm()`/`closeM()`)。加了一个全局 `keydown` 监听：按 **ESC** 键，如果弹窗正开着(`#mbg` 有 `show` class)就调用 `closeM()` 关掉，跟点右上角「×」效果一样。已用 Playwright 验证：打开弹窗后按 ESC，弹窗正确关闭。
+- 复制给明记时：直接沿用即可，是通用的操作习惯优化。
 - 提交信息用中文、清楚描述改动。
 - **拖动排序统一风格**：全系统用 ☰ 拖动手柄排序(触屏+鼠标)，不用一步步 ↑↓。通用工具 `makeSortable`/`wireSortables`/`SORT_HANDLERS`(render 与 openForm 后自动接线)。做任何「可排序列表」都用它：容器加 `data-sort="<类型>"`(+ 上下文 `data-*`)、子行加 `data-sortid` 与一个 `.draghandle`，并在 `SORT_HANDLERS` 注册该类型的落点回调(收到新顺序 ids → 重排数据 → save → 重绘)。已用于：进货单/月末盘点品项行(data-sort="grid")、职位/国籍管理(data-sort="list")。
 - 复制到明记需一并带上的文件：`index.html` + `CLAUDE.md` + `order-data.js` + `sw.js` + `manifest.webmanifest` + `icon-192.png` + `icon-512.png`（以及 `supabase/` 下的推送函数与 SQL，如明记要用推送）。

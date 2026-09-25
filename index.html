@@ -643,7 +643,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0925l";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0925m";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -3163,6 +3163,8 @@ function prefill(type,id){
 function setV(id,val){const el=document.getElementById(id);if(el)el.value=val;}
 function setTitle(txt){const h=document.querySelector('#mbox h3');if(h)h.childNodes[0].textContent=txt+" ";}
 function closeM(){document.getElementById('mbg').classList.remove('show');_orderEditing=false;}
+// 按 ESC 关闭当前弹窗(表单/订单列表等都走同一个 #mbg 弹窗系统)
+try{window.addEventListener('keydown',function(e){if(e.key==='Escape'){const mbg=document.getElementById('mbg');if(mbg&&mbg.classList.contains('show'))closeM();}});}catch(e){}
 document.getElementById('mbg').addEventListener('click',e=>{if(e.target.id==='mbg')closeM();});
 function poHint(){const s=document.getElementById('p_item');if(!s)return;const it=findItem(s.value);document.getElementById('poHint').innerHTML=it?`1 ${it.buyUnit} = ${it.conv} ${it.unit} · ${LANG==="zh"?"现价":"now"} ${money(it.cost)}/${it.unit}`:'';}
 function stTheory(){const s=document.getElementById('st_item');if(!s)return;const it=findItem(s.value);document.getElementById('st_theory').value=it?it.qty+' '+it.unit:'';}
