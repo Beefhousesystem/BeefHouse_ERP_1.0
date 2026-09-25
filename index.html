@@ -289,13 +289,13 @@
 </head>
 <body>
 <div class="top">
-  <div class="l"><button class="menu-btn" onclick="toggleSide()">☰</button><span class="brand-logo" title="牛室炙烤牛排 Beef House"><span class="bh-logo" style="width:34px;height:34px;border-radius:7px;"></span></span><h1 id="appTitle">牛室炙烤牛排</h1><span id="buildBadge" style="margin-left:8px;font-size:10px;padding:2px 6px;border-radius:6px;background:#F2B417;color:#12203A;font-weight:800;">v-</span></div>
+  <div class="l"><button class="menu-btn" onclick="toggleSide()">☰</button><span class="brand-logo" title="牛室炙烤牛排 Beef House"><span class="bh-logo" style="width:34px;height:34px;border-radius:7px;"></span></span><h1 id="appTitle">牛室炙烤牛排</h1><select id="outletSel" onchange="switchOutlet()" style="margin-left:8px;font-size:10px;padding:2px 6px;border-radius:6px;background:#F2B417;color:#12203A;font-weight:800;border:none;"></select></div>
   <div class="r">
     <button class="lang" id="installBtn" onclick="installApp()" title="安装为App Install">📲</button>
     <button class="lang" id="bellBtn" onclick="openOrdersPanel()" title="收到的订单 Orders" style="display:none;position:relative;">🔔<span id="bellCount" style="display:none;position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;line-height:16px;padding:0 3px;border-radius:9px;background:#d92d20;color:#fff;font-size:10px;font-weight:800;text-align:center;">0</span></button>
     <button class="lang" onclick="toggleLang()" id="langBtn">EN</button>
     <select class="sel" id="roleSel" onchange="switchRole()"></select>
-    <select class="sel" id="outletSel" onchange="switchOutlet()"></select>
+    <span id="buildBadge" class="sel">v-</span>
     <button class="lang" onclick="confirmLogout()" id="logoutBtn" title="登出 Log Out">🔓</button>
   </div>
 </div>
@@ -643,7 +643,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0925m";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0925n";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
