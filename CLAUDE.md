@@ -153,6 +153,11 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 4. **开机流程加了一个保护**（`index.html` 最底部的启动 IIFE）：如果网址里带 `type=recovery`（代表是刚点了重设密码链接跳回来），就**不要**走原本「侦测到已登录 session 就直接进系统」那条路，先按住画面等 `PASSWORD_RECOVERY` 事件自己跳出设新密码页面——不然会先闪一下仪表板、才又跳到设密码页，体验很怪。
 5. 这整套完全靠 **Supabase Auth 内建机制**，不需要额外建表/写后端逻辑；前提是 Supabase 项目本身要有寄信服务（用 Supabase 内建的免费寄信额度，或已设定自己的 SMTP）——如果业主反馈"收不到重设密码邮件"，先去 Supabase 控制台 **Authentication → Emails / SMTP Settings** 检查寄信设定，而不是查前端代码。
 6. 复制给明记时：这套忘记密码机制通用，直接沿用即可，不用因店而异调整；但要注意 Supabase 后台 **Authentication → URL Configuration** 里的 Redirect URLs 允许清单要包含明记自己的网址，否则 `resetPasswordForEmail` 的 `redirectTo` 会被 Supabase 拒绝。
+
+### 追加：改密码后跳回登录页，不直接进系统（2026-09-25，BUILD 0925h）
+一开始 `doResetPassword()` 改完密码后直接 `afterAuth(user)` 免登录进系统，业主要求改成**跳回登录页、要求重新输入邮箱+新密码才能登录**（比较符合"重设密码"该有的安全习惯，也避免有人捡到别人开着的重设链接就直接halfway进系统）。
+- 改法：`updateUser({password})` 成功后，先 `_sb.auth.signOut()` 退掉那个「恢复中」的临时 session，再 `showAuthLogin()` 回到登录页，并在登录页原本就有的提示区(`#au_msg`)显示「密码已更新，请用新密码重新登录」。
+- 「忘记密码？」链接也顺手按业主截图要求移到密码输入框正下方、靠右对齐（原本在登录/注册按钮下方）。
 - 提交信息用中文、清楚描述改动。
 - **拖动排序统一风格**：全系统用 ☰ 拖动手柄排序(触屏+鼠标)，不用一步步 ↑↓。通用工具 `makeSortable`/`wireSortables`/`SORT_HANDLERS`(render 与 openForm 后自动接线)。做任何「可排序列表」都用它：容器加 `data-sort="<类型>"`(+ 上下文 `data-*`)、子行加 `data-sortid` 与一个 `.draghandle`，并在 `SORT_HANDLERS` 注册该类型的落点回调(收到新顺序 ids → 重排数据 → save → 重绘)。已用于：进货单/月末盘点品项行(data-sort="grid")、职位/国籍管理(data-sort="list")。
 - 复制到明记需一并带上的文件：`index.html` + `CLAUDE.md` + `order-data.js` + `sw.js` + `manifest.webmanifest` + `icon-192.png` + `icon-512.png`（以及 `supabase/` 下的推送函数与 SQL，如明记要用推送）。

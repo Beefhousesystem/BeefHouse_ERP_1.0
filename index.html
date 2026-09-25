@@ -630,7 +630,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0925g";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0925h";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -4311,11 +4311,13 @@ async function doResetPassword(){
   if(pw1!==pw2){if(m)m.innerHTML='⚠️ '+(LANG==="zh"?"两次输入的密码不一致":"Passwords don't match");return;}
   if(m)m.textContent=LANG==="zh"?"更新中…":"Updating…";
   try{
-    const {data,error}=await _sb.auth.updateUser({password:pw1});
+    const {error}=await _sb.auth.updateUser({password:pw1});
     if(error){if(m)m.innerHTML='❌ '+error.message;return;}
-    if(m)m.innerHTML='✅ '+(LANG==="zh"?"密码已更新，正在登录…":"Password updated, signing you in…");
-    const user=data&&data.user;
-    if(user)await afterAuth(user);else showAuthLogin();
+    // 改完密码不直接进系统——退出这个「恢复中」的临时 session，跳回登录页，要求重新输入邮箱+新密码登录
+    try{await _sb.auth.signOut();}catch(e){}
+    showAuthLogin();
+    const am=document.getElementById('au_msg');
+    if(am)am.innerHTML='✅ '+(LANG==="zh"?"密码已更新，请用新密码重新登录。":"Password updated. Please sign in with your new password.");
   }catch(e){if(m)m.innerHTML='❌ '+(e.message||e);}
 }
 
