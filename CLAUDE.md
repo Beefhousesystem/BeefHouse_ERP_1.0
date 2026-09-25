@@ -141,6 +141,8 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 ## 开发/部署工作流（现有约定）
 - 单文件 ERP，无构建步骤；改 `index.html` → 用 Playwright(`/opt/pw-browsers/chromium`, file://) 无头测试 → 每次改动**bump `const BUILD`**（右上角版本角标可核对已载入最新版）。
 - 部署：`git push beefhouse bh-fix5:main`（失败按 2/4/8/16s 退避重试；remote 已迁移到 yxchong3/BeefHouse_ERP_1.0，GitHub Pages live）。
+- ✅ **2026-09-25 更新：改成直接推 `main`，不再走「开分支 → 开 PR → 业主按合并」这一套**——业主要求跟明记那边一样，改完直接自动推送上线，不需要每次都手动合并。之后的改动：改 `index.html`/`CLAUDE.md`/`supabase-schema.sql` → 语法检查 → `git add` + `git commit` + `git push origin main` 直接推 `main`，不建 `claude/*` 分支、不开 PR。业主如果要看某次改动细节，直接看 `git log`/`git show` 即可。
+  - ⚠️ 涉及 Supabase RLS/触发器的 SQL 改动（`supabase-schema.sql`），改完仍然要提醒业主去 Supabase SQL Editor 手动跑一遍——这条不受此工作流改变影响，光推 GitHub 不会同步到线上数据库。
 - 提交信息用中文、清楚描述改动。
 - **拖动排序统一风格**：全系统用 ☰ 拖动手柄排序(触屏+鼠标)，不用一步步 ↑↓。通用工具 `makeSortable`/`wireSortables`/`SORT_HANDLERS`(render 与 openForm 后自动接线)。做任何「可排序列表」都用它：容器加 `data-sort="<类型>"`(+ 上下文 `data-*`)、子行加 `data-sortid` 与一个 `.draghandle`，并在 `SORT_HANDLERS` 注册该类型的落点回调(收到新顺序 ids → 重排数据 → save → 重绘)。已用于：进货单/月末盘点品项行(data-sort="grid")、职位/国籍管理(data-sort="list")。
 - 复制到明记需一并带上的文件：`index.html` + `CLAUDE.md` + `order-data.js` + `sw.js` + `manifest.webmanifest` + `icon-192.png` + `icon-512.png`（以及 `supabase/` 下的推送函数与 SQL，如明记要用推送）。
