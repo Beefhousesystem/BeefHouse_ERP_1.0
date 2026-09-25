@@ -177,6 +177,16 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 6. **iPhone 瀏海/底部 Home Indicator 安全区**：`.main`(主内容区)和 `.m`(底部弹出的表单弹窗)都加了 `env(safe-area-inset-bottom)` 的额外留白，避免最下面一排按钮(例如薪资发放的『完成核对』按钮)贴着手机的 Home Indicator 横条，很难点准或被系统手势误触。
 - ⚠️ **没有动的部分**：密集数据表格(进货单/月末盘点/薪资发放等)本身的排版密度、行内小字体是业主之前明确要的"一眼看到整月/整表"设计，这次没有为了手机改小表格信息量——如果之后反馈"表格在手机上还是要左右滑很多次很累"，那是另一个课题(要做"手机版简化表格视图")，跟这次修的"卡顿/按不到"是两回事，可以再另外讨论。
 - 复制给明记时：这些都是通用的手机体验优化，直接沿用即可，不用因店而异调整。
+
+## 加浏览器分页图标 favicon（2026-09-25，BUILD 0925k）
+业主截图对比，浏览器分页上明记显示自己的 logo，牛室显示的是浏览器默认的地球图标——检查发现 `index.html` 的 `<head>` 里**从来没加过 `<link rel="icon">`**，浏览器找不到指定的图标只好用默认占位图。已加上：
+```html
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+```
+直接沿用已经裁好、填满整个框的 `icon-192.png`/`icon-512.png`（跟手机主屏幕图标是同一份文件），不用另外做图。
+- 复制给明记时：这三行要加，但 `href` 要指向明记自己的图标文件。
 - 提交信息用中文、清楚描述改动。
 - **拖动排序统一风格**：全系统用 ☰ 拖动手柄排序(触屏+鼠标)，不用一步步 ↑↓。通用工具 `makeSortable`/`wireSortables`/`SORT_HANDLERS`(render 与 openForm 后自动接线)。做任何「可排序列表」都用它：容器加 `data-sort="<类型>"`(+ 上下文 `data-*`)、子行加 `data-sortid` 与一个 `.draghandle`，并在 `SORT_HANDLERS` 注册该类型的落点回调(收到新顺序 ids → 重排数据 → save → 重绘)。已用于：进货单/月末盘点品项行(data-sort="grid")、职位/国籍管理(data-sort="list")。
 - 复制到明记需一并带上的文件：`index.html` + `CLAUDE.md` + `order-data.js` + `sw.js` + `manifest.webmanifest` + `icon-192.png` + `icon-512.png`（以及 `supabase/` 下的推送函数与 SQL，如明记要用推送）。
