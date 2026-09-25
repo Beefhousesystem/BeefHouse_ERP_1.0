@@ -210,6 +210,10 @@ begin
     return true; -- 权限配置：任何已登录白名单用户都可读（App 要用它判断能看哪些页面）
   end if;
 
+  if k = 'erpv2:orders' then
+    return true; -- 订货单：全店共用的实时模板，任何已登录白名单用户都可读（各分店都要下单/看单）
+  end if;
+
   if k like 'erpv2:payroll:%' then
     return v_role in ('owner','hrmanager'); -- 薪资发放计算结果：只有老板/人事经理能读，区域副经理/店长/厨师长/员工一律不给
   end if;
