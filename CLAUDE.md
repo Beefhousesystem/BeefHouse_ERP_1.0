@@ -205,13 +205,6 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 ## 按 ESC 关闭弹窗（2026-09-25，BUILD 0925m）
 全系统所有表单/清单弹窗（新增/编辑各种记录、订单列表等）都是走同一套 `#mbg`/`#mbox` 弹窗系统(`openForm()`/`closeM()`)。加了一个全局 `keydown` 监听：按 **ESC** 键，如果弹窗正开着(`#mbg` 有 `show` class)就调用 `closeM()` 关掉，跟点右上角「×」效果一样。已用 Playwright 验证：打开弹窗后按 ESC，弹窗正确关闭。
 - 复制给明记时：直接沿用即可，是通用的操作习惯优化。
-
-## 顶栏「分店选单」与「版本号角标」互换位置+样式（2026-09-25，BUILD 0925n）
-业主要求把顶栏左边(标题旁)的版本号角标(`#buildBadge`，金色小徽章)跟右边的分店选单(`#outletSel`)**互换位置**，而且**样式也互相交换**——不是单纯换位置、样式不变。
-- `#outletSel`：原本在右边一排选单里，用 `.sel` 样式(半透明白底、白字)，现在搬到左边标题旁，改用原本 `buildBadge` 的行内样式(金底深字小徽章)。
-- `#buildBadge`：原本在标题旁用金底徽章样式，现在搬到右边角色选单/分店选单那一排，改用 `.sel` 这个 class(半透明白底、白字)。
-- 两者的 `id`/`onchange` 都没变，`renderTop()` 等 JS 逻辑都是照 `id` 抓取，不受 DOM 位置搬动影响，功能完全不变，只是外观位置对调。
-- 复制给明记时：这是纯外观调整，明记如果不需要一样的样式可以自行再调，不强制沿用。
 - 提交信息用中文、清楚描述改动。
 - **拖动排序统一风格**：全系统用 ☰ 拖动手柄排序(触屏+鼠标)，不用一步步 ↑↓。通用工具 `makeSortable`/`wireSortables`/`SORT_HANDLERS`(render 与 openForm 后自动接线)。做任何「可排序列表」都用它：容器加 `data-sort="<类型>"`(+ 上下文 `data-*`)、子行加 `data-sortid` 与一个 `.draghandle`，并在 `SORT_HANDLERS` 注册该类型的落点回调(收到新顺序 ids → 重排数据 → save → 重绘)。已用于：进货单/月末盘点品项行(data-sort="grid")、职位/国籍管理(data-sort="list")。
 - 复制到明记需一并带上的文件：`index.html` + `CLAUDE.md` + `order-data.js` + `sw.js` + `manifest.webmanifest` + `icon-192.png` + `icon-512.png`（以及 `supabase/` 下的推送函数与 SQL，如明记要用推送）。
