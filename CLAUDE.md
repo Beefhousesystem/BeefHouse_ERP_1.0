@@ -158,6 +158,12 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 一开始 `doResetPassword()` 改完密码后直接 `afterAuth(user)` 免登录进系统，业主要求改成**跳回登录页、要求重新输入邮箱+新密码才能登录**（比较符合"重设密码"该有的安全习惯，也避免有人捡到别人开着的重设链接就直接halfway进系统）。
 - 改法：`updateUser({password})` 成功后，先 `_sb.auth.signOut()` 退掉那个「恢复中」的临时 session，再 `showAuthLogin()` 回到登录页，并在登录页原本就有的提示区(`#au_msg`)显示「密码已更新，请用新密码重新登录」。
 - 「忘记密码？」链接也顺手按业主截图要求移到密码输入框正下方、靠右对齐（原本在登录/注册按钮下方）。
+
+## PWA 图标去白边，Logo 填满整个框（2026-09-25，BUILD 0925i）
+业主截图对比手机主屏幕图标，牛室的 `icon-192.png`/`icon-512.png` 原图外圈有一大圈深蓝底+白边留白，logo 本体（深青色底的牛头+BEEF HOUSE字样）只占中间一小块方形——加到手机主屏幕后图标看起来缩得很小、四周都是空白。
+- 用 Python/Pillow 量出图片中间那块深青色 logo 方形的精确像素范围（512px 版本是 x/y 129–381 的正方形），直接裁掉外圈的深蓝+白边留白，再把裁出来的正方形等比放大填满整个 512×512 / 192×192 画布。
+- **图案、文字（牛头图案、BEEF HOUSE、牛室炙烧牛排）完全没有被修改**——只是裁切+放大，不是重新设计或重画。
+- 复制给明记时：这个"裁掉留白、logo 填满整个图标框"的处理手法可以照搬，但明记要用**明记自己的 logo 图片**跑同样的裁切流程，不能直接复制牛室裁好的这两个文件。
 - 提交信息用中文、清楚描述改动。
 - **拖动排序统一风格**：全系统用 ☰ 拖动手柄排序(触屏+鼠标)，不用一步步 ↑↓。通用工具 `makeSortable`/`wireSortables`/`SORT_HANDLERS`(render 与 openForm 后自动接线)。做任何「可排序列表」都用它：容器加 `data-sort="<类型>"`(+ 上下文 `data-*`)、子行加 `data-sortid` 与一个 `.draghandle`，并在 `SORT_HANDLERS` 注册该类型的落点回调(收到新顺序 ids → 重排数据 → save → 重绘)。已用于：进货单/月末盘点品项行(data-sort="grid")、职位/国籍管理(data-sort="list")。
 - 复制到明记需一并带上的文件：`index.html` + `CLAUDE.md` + `order-data.js` + `sw.js` + `manifest.webmanifest` + `icon-192.png` + `icon-512.png`（以及 `supabase/` 下的推送函数与 SQL，如明记要用推送）。
