@@ -81,13 +81,45 @@ begin
 end;
 $$;
 
+-- 「是否为老板」：owner 角色专属检查，用于保护老板账号不被人事经理/区域副经理动手脚。
+-- 同样必须是 language plpgsql（原因见上面 erp_is_admin 的注释：会查自己表，sql 函数会被内联触发递归）。
+create or replace function public.erp_is_owner()
+returns boolean
+language plpgsql
+security definer
+stable
+set search_path = public
+as $$
+begin
+  return exists (
+    select 1 from public.erp_users u
+    where u.email = auth.jwt()->>'email'
+      and u.role = 'owner'
+      and u.active
+  );
+end;
+$$;
+
 drop policy if exists "erp_users authed write" on public.erp_users;         -- 移除旧的「任何登录用户皆可写」策略
 drop policy if exists "erp_users admin or bootstrap write" on public.erp_users;
+-- 2026-09-25 加固：在原本「老板/人事经理/区域副经理皆可管理白名单」之上，追加两层保护——
+-- 1) 任何一行的 role='owner'：只有老板本人才能改/删这一行（人事经理/区域副经理管不了老板账号）。
+-- 2) email = 系统最高权限账号（见 index.html 的 SUPREME_OWNER_EMAIL / 下面 handle_new_user 的
+--    v_code_exempt_emails）：只有它自己能改自己这一行，连其他老板账号都不行。
+-- 这两条都用 erp_users_is_empty() 放行首次注册引导（此时还没有任何一行，判断不到 owner 是谁）。
 create policy "erp_users admin or bootstrap write"
   on public.erp_users for all
   to authenticated
-  using ( public.erp_is_admin() or public.erp_users_is_empty() )
-  with check ( public.erp_is_admin() or public.erp_users_is_empty() );
+  using (
+    ( public.erp_is_admin() or public.erp_users_is_empty() )
+    and ( public.erp_users_is_empty() or role <> 'owner' or public.erp_is_owner() )
+    and ( email <> 'yxchong3@gmail.com' or auth.jwt()->>'email' = 'yxchong3@gmail.com' )
+  )
+  with check (
+    ( public.erp_is_admin() or public.erp_users_is_empty() )
+    and ( public.erp_users_is_empty() or role <> 'owner' or public.erp_is_owner() )
+    and ( email <> 'yxchong3@gmail.com' or auth.jwt()->>'email' = 'yxchong3@gmail.com' )
+  );
 
 -- ========== 第 3 部分：注册邀请码 → 自动分配角色 ==========
 -- 目的：注册时前端会把「邀请码」打包成 invite_code 传给 Supabase Auth。

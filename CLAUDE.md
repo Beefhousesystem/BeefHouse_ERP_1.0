@@ -184,3 +184,19 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 - 全部改动跑过 `node --check` 语法检查，无破坏。
 - ⚠️ **`currentEmpId()` 硬编码返回 1**（见前面「岗位角色调整」章节）这个已知限制跟 XSS 无关，仍待后续单独修。
 - 复制给明记时：`oEsc()`/`gEsc()` 这两个转义函数以及本次修的所有调用点都是通用防御，直接沿用即可，不用因店而异调整。
+
+## 权限复查 + 设立「系统最高权限账号」保护（2026-09-25，BUILD 0925b）
+业主问「权限控制够不够」，复查发现一个结构性缺口：**`owner`(老板)/`hrmanager`(人事经理)/`area`(区域副经理) 三个角色在 `canEditPerms()`(app 端)和 `erp_is_admin()`(RLS 端)里被当成完全平级**——意味着任何一个人事经理或区域副经理账号，理论上都能在「白名单/用户管理」把老板账号的岗位改成 staff、停用、甚至删除，也能透过「岗位权限编辑器」把 `owner` 这个角色的模块权限拿掉大半。免邀请码例外(`codeExemptEmails`/`v_code_exempt_emails`)**只在注册那一刻生效**（保证首次注册直接给老板角色），账号建好后跟其他老板账号完全没有差别，没有任何机制保护它不被同级管理角色动手脚。
+
+业主要求：把 `yxchong3@gmail.com` 设成**唯一免邀请码直接变老板、且权限最大（谁都动不了）的账号**。已加两层保护：
+
+1. **老板账号保护（不分是谁）**：任何 `role='owner'` 的白名单记录，只有登录者本人的**真实角色**是 `owner`（不是预览角色）才能编辑/删除；人事经理、区域副经理管不了任何老板账号（连非最高权限的老板账号也不行）。同理，只有老板能把某个账号的岗位**设为**老板（防止人事经理/区域副经理自己或帮别人升级成老板）。
+2. **最高权限账号专属保护（更严）**：新增全局常量 `SUPREME_OWNER_EMAIL='yxchong3@gmail.com'`（`index.html`），凡是白名单里 `email===SUPREME_OWNER_EMAIL` 的这一行，**只有这个邮箱本人登录时能改自己的资料，其他任何账号（包括其他老板账号）一律不行，也不能被删除**。`codeExemptEmails` 免邀请码清单现在直接引用这个常量，避免两处字符串对不上。
+3. **岗位权限编辑器**：`togglePerm()` 加了守卫——`owner` 这个角色本身的模块权限清单，只有真实身份是 `owner` 的账号能改，人事经理/区域副经理不能再把老板角色的权限拿掉。
+
+**代码位置**：
+- `index.html`：`const SUPREME_OWNER_EMAIL='yxchong3@gmail.com'`（ROLES 定义前）；`isSupremeOwner()` 辅助函数；`saveUser()`/`delUser()`/`togglePerm()` 里加的守卫。
+- `supabase-schema.sql` 第 2 部分：新增 `erp_is_owner()`（plpgsql，跟 `erp_is_admin()` 一样的道理，不能用 `language sql` 避免递归），`erp_users` 的写入策略 `"erp_users admin or bootstrap write"` 追加两个 `and` 条件——`role<>'owner' or erp_is_owner()`（老板账号只有老板能碰）与 `email<>'yxchong3@gmail.com' or 自己的jwt邮箱=这个邮箱`（最高权限账号只有自己能碰）；`erp_users_is_empty()` 在两条里都放行，保证系统首次启用、白名单还是空表时的引导注册不受影响。
+- ⚠️ **这条 SQL 改动需要业主去 Supabase SQL Editor 重新跑一遍**（至少 `erp_is_owner()` 函数定义 + `erp_users admin or bootstrap write` 这个策略；或整个脚本），光改仓库文件不会同步到已上线的 Supabase 项目——跟之前 `erp_can_read_key`(订货单)那次一样的道理。
+- ⚠️ **已知残留限制**：「岗位权限编辑器」改的是 `erpv2:roleperms` 这个全局配置(RLS `erp_can_write_key` 判断)，不是某一行用户记录，所以 DB 层暂时无法只挡住"改 owner 角色定义"这一件事——目前只在 app 端(`togglePerm`)拦住，绕过前端直接调 API 理论上仍能改（跟 `currentEmpId()` 那条已知限制类似性质）。要在 DB 层也堵住，需要把 `owner` 角色的权限定义再拆成独立 key 配专属 RLS，是更大改动，先记录着。
+- 复制给明记时：如果明记也要指定专属的"最高权限账号"，把 `SUPREME_OWNER_EMAIL`（index.html）和 RLS 策略里 `'yxchong3@gmail.com'` 那处字符串一起换成明记的邮箱，两边要同步改，不要漏改任何一处（教训同邀请码那条）。

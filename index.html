@@ -563,6 +563,10 @@ const DISH_CATALOG=[
 {code:"合计 TOTAL",cn:"",en:"",price:5965.45,ing:[]},
 ];
 
+// 系统最高权限账号：唯一免邀请码直接变老板的邮箱；此账号的 erp_users 记录(角色/分店/启用状态)
+// 只有它自己能改——包括其他老板/人事经理/区域副经理都不能修改或删除它，见 saveUser/delUser/togglePerm。
+// 改这个邮箱要跟 supabase-schema.sql 里的 v_code_exempt_emails 和 RLS 策略同步改，否则两边会对不上。
+const SUPREME_OWNER_EMAIL='yxchong3@gmail.com';
 const ROLES={
   owner:{name:"老板 Owner",en:"Owner",
     can:["dash","sales","inv","proc","transfer","ck","stock","waste","ent","bom","ap","opex","report","hr","attend","schedule","leave","payroll","settings"],
@@ -626,7 +630,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0925a";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0925b";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -2813,6 +2817,7 @@ const PERM_MODULES=[
 function permLabel(m){const x=PERM_MODULES.find(p=>p[0]===m);return x?(LANG==="zh"?x[1]:x[2]):m;}
 async function togglePerm(role,mod,checked){
   if(!canEditPerms()){alert(LANG==="zh"?"你没有权限修改岗位权限。":"No permission to edit roles.");render();return;}
+  if(role==='owner'&&!(curUser&&curUser.role==='owner')){alert(LANG==="zh"?"老板这个岗位的权限，只有老板本人能修改。":"Only an Owner can change the Owner role's permissions.");render();return;}
   const r=ROLES[role];if(!r)return;
   if(!checked){
     if(mod==='settings'&&r.canEditPerms){alert(LANG==="zh"?"为避免锁死系统，不能移除管理角色的『系统设置』权限。":"Cannot remove Settings from an admin role.");render();return;}
@@ -2934,10 +2939,15 @@ function formUser(email){
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:6px 0 12px;"><input type="checkbox" id="u_active" ${!u||u.active!==false?'checked':''}> ${LANG==="zh"?"启用（允许登录）":"Active (can sign in)"}</label>
     <button class="btn block brand" onclick="saveUser('${email||''}')">${LANG==="zh"?"保存":"Save"}</button>`);
 }
+function isSupremeOwner(){return !!(curUser&&curUser.email===SUPREME_OWNER_EMAIL);}
 async function saveUser(orig){
   const email=(fv('u_email')||orig||'').toLowerCase();const name=fv('u_name');const role=fv('u_role');const outlet=fv('u_outlet');
   const active=document.getElementById('u_active').checked;
   if(!email){alert(LANG==="zh"?"邮箱必填":"Email required");return;}
+  if((orig===SUPREME_OWNER_EMAIL||email===SUPREME_OWNER_EMAIL)&&!isSupremeOwner()){alert(LANG==="zh"?"此账号为系统最高权限账号，只有它本人能修改自己的资料。":"This is the system's supreme account; only it can edit itself.");return;}
+  const targetOrig=orig?USERS.find(u=>u.email===orig):null;
+  if(targetOrig&&targetOrig.role==='owner'&&!isSupremeOwner()&&!(curUser&&curUser.role==='owner')){alert(LANG==="zh"?"老板账号只能由老板本人编辑。":"Owner accounts can only be edited by an Owner.");return;}
+  if(role==='owner'&&!isSupremeOwner()&&!(curUser&&curUser.role==='owner')){alert(LANG==="zh"?"只有老板能把账号设为老板。":"Only an Owner can grant the Owner role.");return;}
   if(orig&&curUser&&orig===curUser.email&&!['owner','hrmanager','area'].includes(role)&&!active){alert(LANG==="zh"?"不能停用或降低自己的管理权限。":"Can't disable/demote yourself.");return;}
   try{const {error}=await _sb.from('erp_users').upsert({email,name,role,outlet,active},{onConflict:'email'});if(error)throw error;
     auditLog("白名单变更",email+" · "+role+" · "+(active?"启用":"停用"),"","");await loadUsers();closeM();render();
@@ -2945,6 +2955,9 @@ async function saveUser(orig){
 }
 async function delUser(email){
   if(curUser&&email===curUser.email){alert(LANG==="zh"?"不能删除当前登录账号。":"Can't delete yourself.");return;}
+  if(email===SUPREME_OWNER_EMAIL){alert(LANG==="zh"?"此账号为系统最高权限账号，无法被删除。":"The supreme account cannot be deleted.");return;}
+  const target=USERS.find(u=>u.email===email);
+  if(target&&target.role==='owner'&&!isSupremeOwner()&&!(curUser&&curUser.role==='owner')){alert(LANG==="zh"?"老板账号只能由老板本人删除。":"Owner accounts can only be deleted by an Owner.");return;}
   if(!confirm(LANG==="zh"?`确定从白名单移除 ${email}？该账号将无法再登录。`:`Remove ${email}?`))return;
   try{const {error}=await _sb.from('erp_users').delete().eq('email',email);if(error)throw error;
     auditLog("白名单删除",email,"","");await loadUsers();render();
@@ -4162,7 +4175,7 @@ async function doAuthSignup(){
     if(m) m.innerHTML = '▲ 请输入邮箱和密码（至少6位）';
     return;
   }
-  const codeExemptEmails=['yxchong3@gmail.com']; // 免邀请码白名单（如老板本人账号）
+  const codeExemptEmails=[SUPREME_OWNER_EMAIL]; // 免邀请码白名单：唯一最高权限账号
   if(!code && !codeExemptEmails.includes(email.toLowerCase())){
     if(m) m.innerHTML = '▲ 请输入邀请码 / 口令（向管理员索取，首次注册必填）';
     return;
