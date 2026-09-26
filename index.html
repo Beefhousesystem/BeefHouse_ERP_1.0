@@ -293,6 +293,7 @@
   <div class="r">
     <button class="lang" id="installBtn" onclick="installApp()" title="安装为App Install">📲</button>
     <button class="lang" id="bellBtn" onclick="openOrdersPanel()" title="收到的订单 Orders" style="display:none;position:relative;">🔔<span id="bellCount" style="display:none;position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;line-height:16px;padding:0 3px;border-radius:9px;background:#d92d20;color:#fff;font-size:10px;font-weight:800;text-align:center;">0</span></button>
+    <button class="lang" id="verBellBtn" onclick="openVersionPanel()" title="版本更新 Version update" style="display:none;position:relative;">🆕<span id="verBellCount" style="display:none;position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;line-height:16px;padding:0 3px;border-radius:9px;background:#2563eb;color:#fff;font-size:10px;font-weight:800;text-align:center;">1</span></button>
     <button class="lang" onclick="toggleLang()" id="langBtn">EN</button>
     <select class="sel" id="roleSel" onchange="switchRole()"></select>
     <select class="sel" id="outletSel" onchange="switchOutlet()"></select>
@@ -643,7 +644,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0926b";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0926c";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -1252,6 +1253,7 @@ function renderTop(){
     roleSel.innerHTML=Object.entries(ROLES).map(([k,v])=>`<option value="${k}" ${k===curRole?'selected':''}>${(curUser&&isAdminUser()&&k!==curUser.role)?'👁 ':''}${LANG==="zh"?v.name:v.en}</option>`).join('');
   }
   if(typeof updateBell==='function')updateBell();
+  if(typeof updateVerBell==='function')updateVerBell();
   const ck=OUTLETS.find(o=>o.ck);const branches=OUTLETS.filter(o=>!o.ck);
   const outletSel=document.getElementById('outletSel');
   const allBranch=ROLES[curRole].allBranch || isAdminUser(); // 管理员预览时仍可切换分店
@@ -2478,6 +2480,47 @@ function setNotified(m){try{localStorage.setItem(ordNotifKey(),JSON.stringify(m)
 function orderUnreadCount(){if(!['owner','hrmanager','area'].includes(curRole))return 0;const seen=+(localStorage.getItem(ordSeenKey())||0);return ORDERS.filter(o=>o.ts>seen).length;}
 function markOrdersSeen(){const latest=ORDERS.reduce((m,o)=>Math.max(m,o.ts),0);localStorage.setItem(ordSeenKey(),String(latest));updateBell();}
 function updateBell(){const bell=document.getElementById('bellBtn');if(!bell)return;const show=['owner','hrmanager','area'].includes(curRole);bell.style.display=show?'':'none';const n=orderUnreadCount();const bc=document.getElementById('bellCount');if(bc){bc.style.display=n?'':'none';bc.textContent=n>99?'99+':n;}}
+/* ---- 版本更新提醒：所有账号都会收到，铃声跟新订单不同 ---- */
+function verAckKey(){return 'bhVerAck';} // 本机(浏览器)已确认到的版本号
+function verPending(){return localStorage.getItem(verAckKey())!==BUILD;}
+function updateVerBell(){
+  const bell=document.getElementById('verBellBtn');if(!bell)return;
+  bell.style.display=''; // 父层 .top 在登录页本来就是隐藏的，这里不用额外判断登录状态
+  const pend=verPending();
+  const bc=document.getElementById('verBellCount');if(bc)bc.style.display=pend?'':'none';
+}
+/* 提示音：跟新订单的 playBeep() 音色不同——两声下滑的清脆"叮咚"，不像订单铃那么急促 */
+function playVersionChime(){
+  try{primeAudio();if(!_audioCtx)return;const ctx=_audioCtx,now=ctx.currentTime;
+    const master=ctx.createGain();master.connect(ctx.destination);
+    master.gain.setValueAtTime(0.0001,now);
+    master.gain.exponentialRampToValueAtTime(0.6,now+0.02);
+    master.gain.exponentialRampToValueAtTime(0.0001,now+1.4);
+    [[784,now,0.6],[523,now+0.16,0.6]].forEach(([f,t,v])=>{const o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=f;g.gain.value=v;o.connect(g);g.connect(master);o.start(t);o.stop(t+1.2);});
+    try{if(navigator.vibrate)navigator.vibrate([120,80,120]);}catch(e){}
+  }catch(e){}
+}
+let _verNotifiedThisSession=false;
+function checkVersionUpdate(){
+  updateVerBell();
+  if(!verPending())return;
+  if(_verNotifiedThisSession)return;_verNotifiedThisSession=true;
+  playVersionChime();
+  const bn=document.createElement('div');bn.className='al al-a';bn.style.cssText='position:fixed;right:16px;bottom:16px;max-width:320px;z-index:9999;box-shadow:0 6px 24px rgba(0,0,0,.2);cursor:pointer;';
+  bn.innerHTML=`<div class="t">🆕 ${LANG==="zh"?"系统已更新":"System updated"}</div>${LANG==="zh"?`已更新到 v${oEsc(BUILD)}，点击🆕查看并确认`:`Updated to v${oEsc(BUILD)}. Tap 🆕 to confirm.`}`;
+  bn.onclick=()=>{openVersionPanel();bn.remove();};document.body.appendChild(bn);setTimeout(()=>bn.remove(),9000);
+}
+function openVersionPanel(){
+  openForm(`<h3>🆕 ${LANG==="zh"?"版本更新":"Version Update"} <span class="x" onclick="closeM()">×</span></h3>
+    <div class="fr"><label>${LANG==="zh"?"当前版本":"Current version"}</label><div style="font-weight:800;font-size:18px;">v${oEsc(BUILD)}</div></div>
+    <div class="mini" style="margin:8px 0 14px;">${LANG==="zh"?"系统已更新到最新版本，功能改动详见 CLAUDE.md 更新记录，或联系管理员了解本次改了什么。":"App is now on the latest version."}</div>
+    <button class="btn block brand" onclick="ackVersion()">✅ ${LANG==="zh"?"确认知道了":"Confirm"}</button>`);
+}
+function ackVersion(){
+  localStorage.setItem(verAckKey(),BUILD);
+  try{auditLog("确认版本更新","v"+BUILD,"","");}catch(e){}
+  updateVerBell();closeM();
+}
 /* 提示音：一声“叮”，响亮 + 约2秒余音（像手机信息提示，WebAudio，无需音频文件）*/
 function primeAudio(){try{_audioCtx=_audioCtx||new (window.AudioContext||window.webkitAudioContext)();if(_audioCtx.state==='suspended')_audioCtx.resume();}catch(e){}}
 function playBeep(){
@@ -2983,9 +3026,17 @@ async function delUser(email){
     auditLog("白名单删除",email,"","");await loadUsers();render();
   }catch(e){alert((LANG==="zh"?"删除失败：":"Delete failed: ")+(e.message||e));}
 }
+function versionSection(){
+  const pend=verPending();
+  return settingsPanel(`🆕 ${LANG==="zh"?"版本更新":"Version"} <span class="mini" style="font-weight:400;">· v${oEsc(BUILD)}</span>`,
+    `<div class="fr"><label>${LANG==="zh"?"当前版本":"Current version"}</label><div style="font-weight:800;font-size:18px;">v${oEsc(BUILD)}</div></div>
+    <div class="mini" style="margin-bottom:10px;">${LANG==="zh"?"App 每次打开会自动检查并更新到最新版本，不需要删除重装。改动细节见仓库 CLAUDE.md 更新记录。":"The app auto-updates on open — no need to delete & reinstall. See CLAUDE.md for change history."}</div>
+    ${pend?`<button class="btn gold sm" onclick="ackVersion()">✅ ${LANG==="zh"?"确认知道了":"Confirm"}</button>`:`<span class="pill p-g">✅ ${LANG==="zh"?"已确认最新版本":"Up to date & confirmed"}</span>`}`);
+}
 function pgSettings(){
   const x=d();
   return `<h2 class="h" style="margin-top:2px;">⚙️ ${LANG==="zh"?"系统设置":"Settings"}</h2>
+  ${versionSection()}
   <div class="card" style="padding:12px;margin-bottom:12px;">
     <div class="fr"><label>${LANG==="zh"?"当前角色权限 (RBAC)":"Role Permissions"}</label>
     <div class="mini">${Object.entries(ROLES).map(([k,v])=>`<div style="padding:4px 0;">${k===curRole?'▶ ':''}<b>${LANG==="zh"?v.name:v.en}</b>：${v.can.length} ${LANG==="zh"?"个模块":"modules"}</div>`).join('')}</div></div>
@@ -4356,7 +4407,7 @@ async function afterAuth(user){
   document.querySelector('.top').style.display='';
   const sb=document.getElementById('sidebar');if(sb)sb.style.display='';
   curPage=firstAllowedPage();render();
-  try{startOrderPoll();notifyNewOrders(true);enablePushSub();}catch(e){}
+  try{startOrderPoll();notifyNewOrders(true);enablePushSub();checkVersionUpdate();}catch(e){}
 }
 async function authLogout(){try{if(AUTH())await _sb.auth.signOut();}catch(e){}curUser=null;showAuthLogin();}
 
@@ -4426,7 +4477,7 @@ function doLogin(){
   document.querySelector('.top').style.display='';
   const sb=document.getElementById('sidebar');if(sb)sb.style.display='';
   curPage=firstAllowedPage();render();
-  try{startOrderPoll();notifyNewOrders(true);}catch(e){}
+  try{startOrderPoll();notifyNewOrders(true);checkVersionUpdate();}catch(e){}
 }
 function logout(){if(AUTH())authLogout();else showLogin();}
 function confirmLogout(){
