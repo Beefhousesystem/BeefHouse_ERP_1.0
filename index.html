@@ -225,7 +225,7 @@
   /* modal */
   .mbg{display:none;position:fixed;inset:0;background:rgba(15,25,45,.5);z-index:100;align-items:flex-end;justify-content:center;}
   .mbg.show{display:flex;}
-  .m{background:#fff;width:100%;max-width:560px;border-radius:18px 18px 0 0;padding:18px;padding-bottom:calc(18px + env(safe-area-inset-bottom));max-height:92vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;animation:su .22s;}
+  .m{background:#fff;width:100%;max-width:560px;border-radius:18px 18px 0 0;padding:18px;padding-bottom:calc(18px + env(safe-area-inset-bottom));max-height:92vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;animation:su .22s;}
   .m.m-wide{max-width:min(1000px,96vw);}
   @media(min-width:640px){.m{border-radius:16px;margin:auto;}.mbg.show{align-items:center;}}
   .m h3{font-size:16px;color:var(--ink);margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;}
@@ -246,7 +246,7 @@
   .fb{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:9px;flex-wrap:wrap;}
   /* sidebar */
   .layout{display:flex;min-height:calc(100vh - 44px);}
-  .side{width:210px;flex-shrink:0;background:#0E1B30;color:#C7D0DE;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;position:sticky;top:var(--topH,44px);height:calc(100vh - var(--topH,44px));transition:width .2s;padding-bottom:calc(16px + env(safe-area-inset-bottom));}
+  .side{width:210px;flex-shrink:0;background:#0E1B30;color:#C7D0DE;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;position:sticky;top:var(--topH,44px);height:calc(100vh - var(--topH,44px));height:calc(100dvh - var(--topH,44px));transition:width .2s;padding-bottom:calc(24px + env(safe-area-inset-bottom));}
   .side .grp{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#5E6E86;padding:14px 16px 5px;font-weight:700;}
   .side button{width:100%;background:none;border:none;color:#C7D0DE;text-align:left;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:9px;border-left:3px solid transparent;}
   .side button:hover{background:rgba(255,255,255,.05);}
@@ -259,7 +259,7 @@
   @media(max-width:760px){
     /* --topH 由 JS(syncTopH)按 .top 实际渲染高度即时算出——顶栏在窄屏可能换成两行，
        写死 44px 会导致侧栏/遮罩盖住或露出顶栏第二行按钮，出现"按不到"的情况。 */
-    .side{position:fixed;left:0;top:var(--topH,44px);z-index:80;width:230px;box-shadow:2px 0 20px rgba(0,0,0,.3);transform:translateX(-100%);transition:transform .2s;height:calc(100vh - var(--topH,44px));}
+    .side{position:fixed;left:0;top:var(--topH,44px);z-index:80;width:230px;box-shadow:2px 0 20px rgba(0,0,0,.3);transform:translateX(-100%);transition:transform .2s;height:calc(100vh - var(--topH,44px));height:calc(100dvh - var(--topH,44px));}
     .side.open{transform:translateX(0);}
     .menu-btn{display:inline-block;}
     .main{padding:14px;}
@@ -644,7 +644,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0926f";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0926g";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -2488,14 +2488,16 @@ function setNotified(m){try{localStorage.setItem(ordNotifKey(),JSON.stringify(m)
 function orderUnreadCount(){if(!['owner','hrmanager','area'].includes(curRole))return 0;const seen=+(localStorage.getItem(ordSeenKey())||0);return ORDERS.filter(o=>o.ts>seen).length;}
 function markOrdersSeen(){const latest=ORDERS.reduce((m,o)=>Math.max(m,o.ts),0);localStorage.setItem(ordSeenKey(),String(latest));updateBell();}
 function updateBell(){const bell=document.getElementById('bellBtn');if(!bell)return;const show=['owner','hrmanager','area'].includes(curRole);bell.style.display=show?'':'none';const n=orderUnreadCount();const bc=document.getElementById('bellCount');if(bc){bc.style.display=n?'':'none';bc.textContent=n>99?'99+':n;}}
-/* ---- 版本更新提醒：所有账号都会收到，铃声跟新订单不同 ---- */
-function verAckKey(){return 'bhVerAck';} // 本机(浏览器)已确认到的版本号
-function verPending(){return localStorage.getItem(verAckKey())!==BUILD;}
+/* ---- 版本更新提醒：所有账号都会收到，铃声跟新订单不同，且是强制性(必须按确认才能继续用) ----
+   跟明记那套改成同一个架构：不再靠"本机是否已确认过 localStorage"这种被动判断，
+   而是主动去服务器抓最新 index.html 文本、比对 BUILD 是否变了(checkForUpdate)，
+   侦测到新版本就跳一个盖满全屏、只有一个「确认更新」按钮的强制弹窗(showUpdateBanner)，
+   不点确认没办法关掉、也不能用 ESC 关掉，逼着一定要刷新到最新版才能继续用系统。 */
+let _updChecking=false,_updShown=false,_updPending=false,_updPendingVer='';
 function updateVerBell(){
   const bell=document.getElementById('verBellBtn');if(!bell)return;
   bell.style.display=''; // 父层 .top 在登录页本来就是隐藏的，这里不用额外判断登录状态
-  const pend=verPending();
-  const bc=document.getElementById('verBellCount');if(bc)bc.style.display=pend?'':'none';
+  const bc=document.getElementById('verBellCount');if(bc)bc.style.display=_updPending?'':'none';
 }
 /* 提示音：跟新订单的 playBeep() 音色不同——两声下滑的清脆"叮咚"，不像订单铃那么急促 */
 function playVersionChime(){
@@ -2508,26 +2510,54 @@ function playVersionChime(){
     try{if(navigator.vibrate)navigator.vibrate([120,80,120]);}catch(e){}
   }catch(e){}
 }
-let _verNotifiedThisSession=false;
-function checkVersionUpdate(){
-  updateVerBell();
-  if(!verPending())return;
-  if(_verNotifiedThisSession)return;_verNotifiedThisSession=true;
+/* 去服务器抓最新 index.html 文本、比对 BUILD 版本号；manual=true 时(设置页/铃铛手动检查)
+   没有更新也会跳提示，让人知道"已经是最新版"而不是没反应。 */
+async function checkForUpdate(manual){
+  if(_updChecking||_updShown){if(manual)alert(LANG==="zh"?"已经在检查/已经有更新待处理。":"Already checking / update pending.");return;}
+  _updChecking=true;
+  try{
+    const res=await fetch(location.pathname+'?_ts='+Date.now(),{cache:'no-store'});
+    if(res.ok){
+      const txt=await res.text();
+      const m=txt.match(/const BUILD\s*=\s*"([^"]+)"/);
+      if(m&&m[1]&&m[1]!==BUILD){showUpdateBanner(m[1]);}
+      else if(manual){alert(LANG==="zh"?`当前版本 v${BUILD}，已是最新版。`:`v${BUILD} — already up to date.`);}
+    }
+  }catch(e){if(manual)alert(LANG==="zh"?"检查更新失败，请稍后再试。":"Check failed, try again later.");}
+  _updChecking=false;
+}
+/* 强制更新：屏幕正中间弹一个盖住全屏的提示，只有一个"确认更新"按钮，
+   没有关闭/点旁边取消的办法，逼着一定要更新到最新版才能继续用系统
+   (避免有人一直用旧版本操作，数据结构/功能跟别人对不上)。所有账号
+   (不分职位)都会收到这个提醒+专属提示音；区域副经理以下账号本来就
+   看不到订单铃铛(bellBtn)，只会看到这个版本更新铃铛。 */
+function showUpdateBanner(newBuild){
+  _updPending=true;_updPendingVer=newBuild;updateVerBell();
+  if(_updShown)return;_updShown=true;
   playVersionChime();
-  const bn=document.createElement('div');bn.className='al al-a';bn.style.cssText='position:fixed;right:16px;bottom:16px;max-width:320px;z-index:9999;box-shadow:0 6px 24px rgba(0,0,0,.2);cursor:pointer;';
-  bn.innerHTML=`<div class="t">🆕 ${LANG==="zh"?"系统已更新":"System updated"}</div>${LANG==="zh"?`已更新到 v${oEsc(BUILD)}，点击🆕查看并确认`:`Updated to v${oEsc(BUILD)}. Tap 🆕 to confirm.`}`;
-  bn.onclick=()=>{openVersionPanel();bn.remove();};document.body.appendChild(bn);setTimeout(()=>bn.remove(),9000);
+  const zh=LANG==="zh";
+  const ov=document.createElement('div');
+  ov.id='forceUpdOverlay';
+  ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(15,25,45,.72);display:flex;align-items:center;justify-content:center;padding:20px;';
+  ov.innerHTML=`<div style="background:#fff;border-radius:16px;padding:26px 22px;max-width:340px;width:100%;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.35);">
+    <div style="font-size:36px;margin-bottom:10px;">🆕</div>
+    <div style="font-weight:800;font-size:17px;color:var(--ink);margin-bottom:8px;">${zh?"有新版本可用":"New Version Available"}</div>
+    <div class="mini" style="margin-bottom:18px;line-height:1.6;">${zh?`系统已更新到 <b>v${oEsc(newBuild)}</b>，请更新后才能继续使用，避免跟其他人使用的版本不一致。`:`The app was updated to <b>v${oEsc(newBuild)}</b>. Please update to continue.`}</div>
+    <button class="btn block brand" id="forceUpdBtn">✅ ${zh?"确认更新":"Update Now"}</button>
+  </div>`;
+  document.body.appendChild(ov);
+  document.getElementById('forceUpdBtn').onclick=()=>{location.href=location.pathname+'?_ts='+Date.now();};
 }
+/* 铃铛点开：有更新待处理就重新弹出强制更新窗(避免不小心被切走/看不到)；
+   没有的话就只是显示目前版本号。 */
 function openVersionPanel(){
-  openForm(`<h3>🆕 ${LANG==="zh"?"版本更新":"Version Update"} <span class="x" onclick="closeM()">×</span></h3>
-    <div class="fr"><label>${LANG==="zh"?"当前版本":"Current version"}</label><div style="font-weight:800;font-size:18px;">v${oEsc(BUILD)}</div></div>
-    <div class="mini" style="margin:8px 0 14px;">${LANG==="zh"?"系统已更新到最新版本，功能改动详见 CLAUDE.md 更新记录，或联系管理员了解本次改了什么。":"App is now on the latest version."}</div>
-    <button class="btn block brand" onclick="ackVersion()">✅ ${LANG==="zh"?"确认知道了":"Confirm"}</button>`);
+  if(_updPending){_updShown=false;showUpdateBanner(_updPendingVer);return;}
+  alert(LANG==="zh"?`🆕 版本更新通知\n\n当前版本：v${BUILD}\n已是最新版，一旦有更新会自动跳出提醒+响铃。`:`Current version: v${BUILD} — up to date.`);
 }
-function ackVersion(){
-  localStorage.setItem(verAckKey(),BUILD);
-  try{auditLog("确认版本更新","v"+BUILD,"","");}catch(e){}
-  updateVerBell();closeM();
+function startUpdateCheck(){
+  checkForUpdate();
+  setInterval(()=>{checkForUpdate();if(_swReg)_swReg.update().catch(()=>{});},5*60*1000); // 每5分钟查一次，顺便叫 sw.js 也主动check
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){checkForUpdate();if(_swReg)_swReg.update().catch(()=>{});}}); // 从背景切回前台也查一次
 }
 /* 提示音：一声“叮”，响亮 + 约2秒余音（像手机信息提示，WebAudio，无需音频文件）*/
 function primeAudio(){try{_audioCtx=_audioCtx||new (window.AudioContext||window.webkitAudioContext)();if(_audioCtx.state==='suspended')_audioCtx.resume();}catch(e){}}
@@ -3035,11 +3065,10 @@ async function delUser(email){
   }catch(e){alert((LANG==="zh"?"删除失败：":"Delete failed: ")+(e.message||e));}
 }
 function versionSection(){
-  const pend=verPending();
   return settingsPanel(`🆕 ${LANG==="zh"?"版本更新":"Version"} <span class="mini" style="font-weight:400;">· v${oEsc(BUILD)}</span>`,
-    `<div class="fr"><label>${LANG==="zh"?"当前版本":"Current version"}</label><div style="font-weight:800;font-size:18px;">v${oEsc(BUILD)}</div></div>
-    <div class="mini" style="margin-bottom:10px;">${LANG==="zh"?"App 每次打开会自动检查并更新到最新版本，不需要删除重装。改动细节见仓库 CLAUDE.md 更新记录。":"The app auto-updates on open — no need to delete & reinstall. See CLAUDE.md for change history."}</div>
-    ${pend?`<button class="btn gold sm" onclick="ackVersion()">✅ ${LANG==="zh"?"确认知道了":"Confirm"}</button>`:`<span class="pill p-g">✅ ${LANG==="zh"?"已确认最新版本":"Up to date & confirmed"}</span>`}`);
+    `<div class="mini">${LANG==="zh"?"当前版本":"Current version"}：<b>v${oEsc(BUILD)}</b></div>
+    <div class="mini" style="margin-top:6px;">${LANG==="zh"?"系统每隔几分钟、或从背景切回前台时会自动检查新版本；侦测到时所有账号都会响铃+跳出强制更新窗，必须按确认更新才能继续使用。":"Auto-checks every few minutes and on resume; when found, all accounts get a chime + forced update prompt."}</div>
+    <button class="btn ghost sm" style="margin-top:8px;" onclick="checkForUpdate(true)">🔄 ${LANG==="zh"?"手动检查更新":"Check now"}</button>`);
 }
 function pgSettings(){
   const x=d();
@@ -4415,7 +4444,7 @@ async function afterAuth(user){
   document.querySelector('.top').style.display='';
   const sb=document.getElementById('sidebar');if(sb)sb.style.display='';
   curPage=firstAllowedPage();render();
-  try{startOrderPoll();notifyNewOrders(true);enablePushSub();checkVersionUpdate();}catch(e){}
+  try{startOrderPoll();notifyNewOrders(true);enablePushSub();}catch(e){}
 }
 async function authLogout(){try{if(AUTH())await _sb.auth.signOut();}catch(e){}curUser=null;showAuthLogin();}
 
@@ -4485,7 +4514,7 @@ function doLogin(){
   document.querySelector('.top').style.display='';
   const sb=document.getElementById('sidebar');if(sb)sb.style.display='';
   curPage=firstAllowedPage();render();
-  try{startOrderPoll();notifyNewOrders(true);checkVersionUpdate();}catch(e){}
+  try{startOrderPoll();notifyNewOrders(true);}catch(e){}
 }
 function logout(){if(AUTH())authLogout();else showLogin();}
 function confirmLogout(){
@@ -4495,21 +4524,6 @@ function confirmLogout(){
 }
 
 /* ---------- init ---------- */
-function showUpdateBanner(){
-  if(document.getElementById('updBanner'))return;
-  const b=document.createElement('div');
-  b.id='updBanner';
-  b.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#12203A;color:#fff;padding:10px 14px;padding-bottom:calc(10px + env(safe-area-inset-bottom));display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;box-shadow:0 -2px 10px rgba(0,0,0,.2);';
-  b.innerHTML=`<span>🆕 ${LANG==="zh"?"有新版本可用":"New version available"}</span><button style="background:#F2B417;color:#12203A;border:none;border-radius:6px;padding:8px 14px;font-weight:800;">${LANG==="zh"?"立即更新":"Update now"}</button>`;
-  b.querySelector('button').onclick=async()=>{
-    try{
-      const reg=await navigator.serviceWorker.getRegistration();
-      if(reg&&reg.waiting)reg.waiting.postMessage('skipWaiting');
-      else location.reload();
-    }catch(e){location.reload();}
-  };
-  document.body.appendChild(b);
-}
 let _deferredPrompt=null;
 function installApp(){
   if(_deferredPrompt){_deferredPrompt.prompt();try{_deferredPrompt.userChoice.finally(()=>{_deferredPrompt=null;});}catch(e){_deferredPrompt=null;}return;}
@@ -4522,24 +4536,17 @@ function installApp(){
   if('serviceWorker'in navigator){
     navigator.serviceWorker.register('sw.js').then(r=>{
       _swReg=r;
-      // 每次打开/回到前台都主动问一次有没有新版本(sw.js 本身也会被浏览器抓最新的)
-      try{r.update();}catch(e){}
-      // 侦测到新版本已经装好、且已经有旧版本在跑(!r.installing 排除首次安装) → 提示刷新
+      // 有新版本的 sw.js 装好待命时(装好=网络已经拿到新版本)，立刻查一次版本号跳强制更新窗，
+      // 不用等5分钟那个定时检查，网络够快的话几乎是开App当下就会侦测到。
       r.addEventListener('updatefound',()=>{
         const nw=r.installing;if(!nw)return;
-        nw.addEventListener('statechange',()=>{
-          if(nw.state==='installed'&&navigator.serviceWorker.controller)showUpdateBanner();
-        });
+        nw.addEventListener('statechange',()=>{if(nw.state==='installed'&&navigator.serviceWorker.controller)checkForUpdate();});
       });
     }).catch(()=>{});
-    // 新的 service worker 接管页面后，代表新版本已经生效：整页刷新一次，画面才会真的换成新版本
-    let _swRefreshed=false;
-    navigator.serviceWorker.addEventListener('controllerchange',()=>{
-      if(_swRefreshed)return;_swRefreshed=true;location.reload();
-    });
   }
   try{window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();_deferredPrompt=e;});}catch(e){}
   try{window.addEventListener('click',function(){if(typeof primeAudio==='function')primeAudio();},{once:true});}catch(e){}
+  startUpdateCheck();
   initCloud();
   // 忘记密码：如果是点了重设密码邮件里的链接跳回来的(URL 带 type=recovery)，
   // 不要走「有 session 就直接登入」这条路——等 onAuthStateChange 的 PASSWORD_RECOVERY
