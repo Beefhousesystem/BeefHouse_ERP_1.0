@@ -336,3 +336,14 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 5. **设置&审计页新增「🆕 版本更新」面板**（`versionSection()`，插在 `pgSettings()` 最前面，**所有角色都看得到**，不像"账号权限"/"员工操作监察"那些面板限定管理角色）：显示当前版本号 vXXXX，未确认时显示同一颗「✅ 确认知道了」按钮，已确认则显示一个绿色「✅ 已确认最新版本」的标签。
 - 已用 Playwright 验证：登录后 `verBellBtn`/`verBellCount` 正确显示、点击后弹窗正确显示当前 `BUILD`、确认后 `verPending()` 变 `false`；`pgSettings()` 渲染结果含「版本更新」字样。
 - 复制给明记时：这套"全员版本更新提醒+专属铃声+确认记录"机制通用，直接沿用即可，不用因店而异调整。
+
+## 修复：手机上滑左边侧栏菜单，偶尔会滑到背后的页面内容（2026-09-26，BUILD 0926d）
+业主录了一段手机操作视频：打开左边的功能选单(侧栏)后，手指在侧栏范围内滑动，偶尔不是滚动侧栏菜单本身，而是滚到了背后被侧栏盖住的右边页面内容。
+
+**根因**：侧栏(`.side`)在手机版是 `position:fixed` 悬浮在页面上方的浮层，而背后的主内容(`.main`)其实是靠**整个网页(`<body>`)**在滚动(`.main` 本身没有设 `overflow`)。侧栏虽然自己有 `overflow-y:auto` 能滚动，但原本**没有** `overscroll-behavior:contain`——手指往上/下滑到侧栏清单的顶部/底部尽头时(或列表本身还没长到需要滚动)，浏览器预设行为是把这个滚动手势继续"传"给背后的父层(也就是整个网页)，变成背后的页面跟着动，而侧栏正上方半透明的遮罩(`.backdrop`)本身也没有阻止触摸手势穿透，两个都在放行。这是一个真实存在、可用 CSS 的默认滚动链(scroll chaining)行为解释的 bug，不是偶发的手机故障。
+**修法（三处配合，一次锁死不给漏）：**
+1. `.side` 加 `overscroll-behavior:contain`(滚到清单顶/底就停在这里，不再往外传)+`touch-action:pan-y`(明确只允许上下滑动这个手势，不接受其它方向的滚动/缩放穿透)。
+2. `.backdrop`（侧栏背后那层半透明遮罩，本来只用来点一下关闭菜单）加 `touch-action:none`+`overscroll-behavior:contain`——它本身不该有任何滚动行为，手指压在它上面滑动一律不产生滚动效果。
+3. **新增 `setSideOpen(open)` 统一函数**，取代原本 `toggleSide()`/`nav()` 里各自手动加减 class 的写法：打开侧栏那一刻**直接把 `document.body.style.overflow` 设成 `hidden`**，从根本上让背后的整个网页在侧栏开着期间完全不能滚动(不管是手指划到侧栏尽头传上来的，还是不小心划到遮罩上的)，关闭侧栏时(点遮罩/点菜单项切换页面/再点一次☰)才恢复 `''` 让页面正常滚动。这是最直接、最不依赖各浏览器 CSS 滚动链细节差异的做法——三层防御里最关键的一道。
+- 已用 Playwright 在 375×667 手机宽度验证：`toggleSide()` 打开后 `document.body.style.overflow==='hidden'`、侧栏 `overscroll-behavior:contain`+`touch-action:pan-y`、遮罩 `touch-action:none`；再次 `toggleSide()` 关闭后 `body.style.overflow` 正确恢复为空字符串。
+- 复制给明记时：这是通用的手机滚动体验修复，直接沿用即可，不用因店而异调整。
