@@ -643,7 +643,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0926a";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0926b";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -4436,6 +4436,21 @@ function confirmLogout(){
 }
 
 /* ---------- init ---------- */
+function showUpdateBanner(){
+  if(document.getElementById('updBanner'))return;
+  const b=document.createElement('div');
+  b.id='updBanner';
+  b.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#12203A;color:#fff;padding:10px 14px;padding-bottom:calc(10px + env(safe-area-inset-bottom));display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;box-shadow:0 -2px 10px rgba(0,0,0,.2);';
+  b.innerHTML=`<span>🆕 ${LANG==="zh"?"有新版本可用":"New version available"}</span><button style="background:#F2B417;color:#12203A;border:none;border-radius:6px;padding:8px 14px;font-weight:800;">${LANG==="zh"?"立即更新":"Update now"}</button>`;
+  b.querySelector('button').onclick=async()=>{
+    try{
+      const reg=await navigator.serviceWorker.getRegistration();
+      if(reg&&reg.waiting)reg.waiting.postMessage('skipWaiting');
+      else location.reload();
+    }catch(e){location.reload();}
+  };
+  document.body.appendChild(b);
+}
 let _deferredPrompt=null;
 function installApp(){
   if(_deferredPrompt){_deferredPrompt.prompt();try{_deferredPrompt.userChoice.finally(()=>{_deferredPrompt=null;});}catch(e){_deferredPrompt=null;}return;}
@@ -4445,7 +4460,25 @@ function installApp(){
     :(iOS?"iOS: Share → Add to Home Screen":"Android: Menu (⋮) → Install app / Add to Home Screen"));
 }
 (async()=>{
-  if('serviceWorker'in navigator){navigator.serviceWorker.register('sw.js').then(r=>{_swReg=r;}).catch(()=>{});}
+  if('serviceWorker'in navigator){
+    navigator.serviceWorker.register('sw.js').then(r=>{
+      _swReg=r;
+      // 每次打开/回到前台都主动问一次有没有新版本(sw.js 本身也会被浏览器抓最新的)
+      try{r.update();}catch(e){}
+      // 侦测到新版本已经装好、且已经有旧版本在跑(!r.installing 排除首次安装) → 提示刷新
+      r.addEventListener('updatefound',()=>{
+        const nw=r.installing;if(!nw)return;
+        nw.addEventListener('statechange',()=>{
+          if(nw.state==='installed'&&navigator.serviceWorker.controller)showUpdateBanner();
+        });
+      });
+    }).catch(()=>{});
+    // 新的 service worker 接管页面后，代表新版本已经生效：整页刷新一次，画面才会真的换成新版本
+    let _swRefreshed=false;
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{
+      if(_swRefreshed)return;_swRefreshed=true;location.reload();
+    });
+  }
   try{window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();_deferredPrompt=e;});}catch(e){}
   try{window.addEventListener('click',function(){if(typeof primeAudio==='function')primeAudio();},{once:true});}catch(e){}
   initCloud();
