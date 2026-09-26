@@ -354,3 +354,11 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 **修法**：`.side` 加 `padding-bottom:calc(16px + env(safe-area-inset-bottom))`，跟 `.main`/`.m` 用同一套安全区适配手法，滚到底时最后一项前留出足够空间，不会被系统手势条盖住。
 - 已用 Playwright 验证：`.side` 的 `padding-bottom` 正确套用。
 - 复制给明记时：这是通用的安全区适配补漏，直接沿用即可。
+
+## 手机版登出按钮移到图标那一排 + 版本更新铃铛换成业主指定的 logo（2026-09-26，BUILD 0926f）
+业主截图：手机版顶栏因为 `.top .r`(右侧一整排按钮容器)是 `flex-wrap:wrap`，窄屏下自动分成好几行——第一行是 📲🔔🆕EN 四个图标，第二行是角色/分店选单，**登出🔓 因为写在 HTML 最后面，被挤到第三行、自己孤零零一个**。业主要求登出按钮跟上面四个图标放一起（排最右边）。另外要求把「版本更新」那颗铃铛的图标换成业主提供的图片(蓝底圆形、白色"开机符号+向上箭头"的更新图案)。
+**改法：**
+1. 顶栏 `.r` 容器里几个按钮的 HTML 顺序，把 `<button id="logoutBtn">🔓</button>` 从最后面（角色/分店选单之后）移到 `#langBtn` 后面、两个 `<select>` 之前——因为容器本来就是 flex-wrap，几个固定宽度的小按钮(📲🔔🆕EN🔓)会自动排在同一行，两个较宽的下拉选单(角色/分店)排不下才会自动换到下一行，纯粹调整 DOM 顺序就让登出按钮"归队"到图标那一排、且在最右边，不用另外写 CSS。
+2. 新增 `icon-update.png`（业主提供的图片，用 Python/Pillow 裁掉四角灰底、套圆形透明遮罩处理成干净的圆形图标，128×128），`#verBellBtn` 里原本的 🆕 emoji 换成 `<img src="icon-update.png" style="width:18px;height:18px;vertical-align:middle;">`。
+- 已用 Playwright 在 375×667 手机宽度截图确认：📲🔔🆕(新图标)EN🔓 五个按钮同一排、登出在最右边；`verBellBtn` 里的图片正确载入显示。
+- 复制给明记时：登出按钮排位是通用调整可直接沿用；`icon-update.png` 图标如果明记想用同一款可以直接搬，若明记想用不同风格的图标则自行换图。
