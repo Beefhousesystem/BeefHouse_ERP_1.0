@@ -644,7 +644,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0926g";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0926h";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -2531,10 +2531,24 @@ async function checkForUpdate(manual){
    (避免有人一直用旧版本操作，数据结构/功能跟别人对不上)。所有账号
    (不分职位)都会收到这个提醒+专属提示音；区域副经理以下账号本来就
    看不到订单铃铛(bellBtn)，只会看到这个版本更新铃铛。 */
+/* 是否正卡在"填表格"当中——弹窗表单(#mbg 开着)还没按保存前，数据只在
+   输入框里、还没写进 d()，这时候如果被强制刷新会把正在填的东西冲掉。
+   进货单/月末盘点那种表格页面不算(每格打完字 400ms 内就自动存进 d()+云端，
+   不受刷新影响)，只有「新增/编辑」用的这种弹出表单才会有这个风险。 */
+function formModalOpen(){const mbg=document.getElementById('mbg');return !!(mbg&&mbg.classList.contains('show'));}
 function showUpdateBanner(newBuild){
   _updPending=true;_updPendingVer=newBuild;updateVerBell();
-  if(_updShown)return;_updShown=true;
+  if(_updShown)return;
   playVersionChime();
+  if(formModalOpen()){
+    // 正在填表格：先不弹全屏强制窗(怕盖住表单、逼着放弃还没保存的内容)，
+    // 只响铃+亮红点提醒，等这份表格关掉(保存或取消)那一刻，closeM() 会自动补上强制窗。
+    return;
+  }
+  renderForceUpdateOverlay(newBuild);
+}
+function renderForceUpdateOverlay(newBuild){
+  if(_updShown)return;_updShown=true;
   const zh=LANG==="zh";
   const ov=document.createElement('div');
   ov.id='forceUpdOverlay';
@@ -2551,7 +2565,7 @@ function showUpdateBanner(newBuild){
 /* 铃铛点开：有更新待处理就重新弹出强制更新窗(避免不小心被切走/看不到)；
    没有的话就只是显示目前版本号。 */
 function openVersionPanel(){
-  if(_updPending){_updShown=false;showUpdateBanner(_updPendingVer);return;}
+  if(_updPending){_updShown=false;if(formModalOpen()){alert(LANG==="zh"?"有新版本待更新，请先完成/取消手上这份表格，关闭后会自动跳出更新窗。":"An update is pending — finish or cancel the open form first; the update prompt will appear once it's closed.");return;}renderForceUpdateOverlay(_updPendingVer);return;}
   alert(LANG==="zh"?`🆕 版本更新通知\n\n当前版本：v${BUILD}\n已是最新版，一旦有更新会自动跳出提醒+响铃。`:`Current version: v${BUILD} — up to date.`);
 }
 function startUpdateCheck(){
@@ -3250,7 +3264,11 @@ function prefill(type,id){
 }
 function setV(id,val){const el=document.getElementById(id);if(el)el.value=val;}
 function setTitle(txt){const h=document.querySelector('#mbox h3');if(h)h.childNodes[0].textContent=txt+" ";}
-function closeM(){document.getElementById('mbg').classList.remove('show');_orderEditing=false;}
+function closeM(){document.getElementById('mbg').classList.remove('show');_orderEditing=false;
+  // 表格关掉(保存/取消/ESC都算)那一刻，如果有版本更新还卡着没弹出来(之前因为怕冲掉正在填的表格而延后)，
+  // 现在补弹出来——不会让这次更新提醒"被表格挡住之后就消失不见"。
+  if(_updPending&&!_updShown)renderForceUpdateOverlay(_updPendingVer);
+}
 // 按 ESC 关闭当前弹窗(表单/订单列表等都走同一个 #mbg 弹窗系统)
 try{window.addEventListener('keydown',function(e){if(e.key==='Escape'){const mbg=document.getElementById('mbg');if(mbg&&mbg.classList.contains('show'))closeM();}});}catch(e){}
 document.getElementById('mbg').addEventListener('click',e=>{if(e.target.id==='mbg')closeM();});

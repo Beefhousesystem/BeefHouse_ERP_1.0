@@ -5,7 +5,7 @@
    用缓存(离线也能打开，不会白屏)。缓存名字带版本号，每次改版跟着
    index.html 的 BUILD 一起手动升级，旧版本缓存会在 activate 时自动清掉。
    (跟明记那套用同一个架构，方便两边比对/一起维护。) */
-const SW_VERSION = '0926g'; // ⚠️ 跟 index.html 的 BUILD 一起手动升级，保持一致
+const SW_VERSION = '0926h'; // ⚠️ 跟 index.html 的 BUILD 一起手动升级，保持一致
 const CACHE_NAME = 'beefhouse-erp-' + SW_VERSION;
 const CORE_ASSETS = ['./', './index.html', './order-data.js', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-update.png'];
 
