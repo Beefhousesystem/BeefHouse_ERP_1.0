@@ -643,7 +643,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0925o";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0926a";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -3442,11 +3442,18 @@ function settleTxt(s){const m={"补货":"Restock","不收费":"No Charge","取�
 function modePill(m){return m==="transfer"?"p-b":m==="return"?"p-a":m==="loan"?"p-p":"p-n";}
 function modeTxt(m){const z={transfer:"直接调拨",return:"借用归还",loan:"借出支援"},e={transfer:"Transfer",return:"Return",loan:"Loan Out"};return LANG==="zh"?(z[m]||m):(e[m]||m);}
 function itemSelOpts(sel){return (d().items||[]).map(i=>`<option value="${oEsc(i.name)}" ${i.name===sel?'selected':''}>${oEsc(i.name)}</option>`).join('');}
-/* 报废损耗可选：库存食材 + 菜单成品(B1–D4)，可自行输入新名 */
-function wasteItemOpts(){
+/* 报废损耗可选：库存食材 + 菜单成品(B1–D4)。跟跨店调拨的品项下拉(itemSelOpts)同一种「选单」样式 */
+function wasteItemSelOpts(sel){
   const dishes=(d().recipes||[]).map(r=>r.name);
   const items=(d().items||[]).map(i=>i.name);
-  return [...dishes,...items].map(n=>`<option value="${oEsc(n)}"></option>`).join('');
+  const list=[...dishes,...items];
+  if(sel&&!list.includes(sel))list.unshift(sel); // 保留历史手动输入过的旧名字，不然编辑时会跳成空白
+  return list.map(n=>`<option value="${oEsc(n)}" ${n===sel?'selected':''}>${oEsc(n)}</option>`).join('')||`<option value=""></option>`;
+}
+function menuItemSelOpts(sel){
+  const list=(typeof MENU_ITEMS!=='undefined'?MENU_ITEMS:[]).slice();
+  if(sel&&!list.includes(sel))list.unshift(sel);
+  return list.map(n=>`<option value="${oEsc(n)}" ${n===sel?'selected':''}>${oEsc(n)}</option>`).join('')||`<option value=""></option>`;
 }
 function supplierSelOpts(sel){return supplierList().map(v=>`<option value="${oEsc(v.name)}" ${v.name===sel?'selected':''}>${oEsc(v.name)}</option>`).join('');}
 function outletNames(){return OUTLETS.filter(o=>!o.ck&&o.id!==curOutlet).map(o=>nm(o));}
@@ -3774,7 +3781,7 @@ function formWaste2(editIdx){
   const reasonOpts=reasons.map(x=>`<option ${r&&r.reason===x?'selected':''}>${x}</option>`).join('');
   openForm(`<h3>🗑 ${isEdit?(LANG==="zh"?"编辑报废":"Edit Wastage"):(LANG==="zh"?"新增报废":"New Wastage")} <span class="x" onclick="closeM()">×</span></h3>
     <div class="fg2"><div class="fr"><label>${LANG==="zh"?"日期":"Date"}</label><input id="w_date" type="date" value="${r?r.date:TODAY}"></div>
-      <div class="fr"><label>${LANG==="zh"?"物品名称 / 菜品(可输入)":"Item / Dish"}</label><input id="w_item" list="wItemList" onchange="wItemAuto()" value="${r?oEsc(r.item||''):''}" placeholder="${LANG==="zh"?"选或直接输入":"pick or type"}"><datalist id="wItemList">${wasteItemOpts()}</datalist></div></div>
+      <div class="fr"><label>${LANG==="zh"?"物品名称 / 菜品":"Item / Dish"}</label><select id="w_item" onchange="wItemAuto()">${wasteItemSelOpts(r?r.item:'')}</select></div></div>
     <div class="fg3"><div class="fr"><label>Code</label><input id="w_code" value="${r?oEsc(r.code||''):''}"></div>
       <div class="fr"><label>${LANG==="zh"?"成本价RM":"Cost"}</label><input id="w_cost" type="number" step="0.01" value="${r?r.cost:''}"></div>
       <div class="fr"><label>${LANG==="zh"?"数量":"Qty"}</label><input id="w_qty" type="number" step="0.01" value="${r?r.qty:''}"></div></div>
@@ -3810,7 +3817,7 @@ function formOffer(editIdx){
   openForm(`<h3>🎁 ${isEdit?(LANG==="zh"?"编辑招待/赠送":"Edit Offer"):(LANG==="zh"?"新增招待/赠送":"New Offer")} <span class="x" onclick="closeM()">×</span></h3>
     <div class="fg2"><div class="fr"><label>${LANG==="zh"?"日期":"Date"}</label><input id="o_date" type="date" value="${r?r.date:TODAY}"></div>
       <div class="fr"><label>${LANG==="zh"?"类型":"Type"}</label><select id="o_type"><option value="ENT" ${r&&r.type==='ENT'?'selected':''}>ENT ${LANG==="zh"?"招待":""}</option><option value="Offer" ${r&&r.type==='Offer'?'selected':''}>Offer ${LANG==="zh"?"赠送":""}</option></select></div></div>
-    <div class="fr"><label>${LANG==="zh"?"物品名称 / 菜品（可选可输入）":"Item / Dish"}</label><input id="o_item" list="menuList" placeholder="${LANG==="zh"?"点开选菜单，或直接输入":"pick or type"}" value="${r?oEsc(r.item||''):''}"><datalist id="menuList">${(typeof MENU_ITEMS!=='undefined'?MENU_ITEMS:[]).map(m=>`<option value="${oEsc(m)}"></option>`).join('')}</datalist></div>
+    <div class="fr"><label>${LANG==="zh"?"物品名称 / 菜品":"Item / Dish"}</label><select id="o_item">${menuItemSelOpts(r?r.item:'')}</select></div>
     <div class="fg3"><div class="fr"><label>${LANG==="zh"?"负责人":"In Charge"}</label><input id="o_person" value="${r?oEsc(r.person||''):''}"></div>
       <div class="fr"><label>${LANG==="zh"?"数量":"Qty"}</label><input id="o_qty" type="number" step="1" value="${r?r.qty:''}"></div>
       <div class="fr"><label>${LANG==="zh"?"总数RM":"Total"}</label><input id="o_total" type="number" step="0.01" value="${r?r.total:''}"></div></div>
