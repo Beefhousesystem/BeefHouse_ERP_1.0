@@ -347,3 +347,10 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 3. **新增 `setSideOpen(open)` 统一函数**，取代原本 `toggleSide()`/`nav()` 里各自手动加减 class 的写法：打开侧栏那一刻**直接把 `document.body.style.overflow` 设成 `hidden`**，从根本上让背后的整个网页在侧栏开着期间完全不能滚动(不管是手指划到侧栏尽头传上来的，还是不小心划到遮罩上的)，关闭侧栏时(点遮罩/点菜单项切换页面/再点一次☰)才恢复 `''` 让页面正常滚动。这是最直接、最不依赖各浏览器 CSS 滚动链细节差异的做法——三层防御里最关键的一道。
 - 已用 Playwright 在 375×667 手机宽度验证：`toggleSide()` 打开后 `document.body.style.overflow==='hidden'`、侧栏 `overscroll-behavior:contain`+`touch-action:pan-y`、遮罩 `touch-action:none`；再次 `toggleSide()` 关闭后 `body.style.overflow` 正确恢复为空字符串。
 - 复制给明记时：这是通用的手机滚动体验修复，直接沿用即可，不用因店而异调整。
+
+## 修复：侧栏菜单滑到最底，最后一项「设置&审计」被裁掉看不到（2026-09-26，BUILD 0926e）
+业主又录了一段视频：侧栏菜单往下滑到底，最后一项「设置&审计」被手机底部的 Home Indicator/系统手势横条挡住/裁切，滑不出来。
+**根因**：`.side`(侧栏)本身没有设置底部留白——虽然主内容区 `.main`、弹出表单 `.m` 之前(BUILD 0925j)都已经加过 `env(safe-area-inset-bottom)` 的安全区留白，**唯独侧栏漏了这一处**，所以侧栏列表滚到底时，最后一个按钮正好卡在瀏海机型的 Home Indicator 底下。
+**修法**：`.side` 加 `padding-bottom:calc(16px + env(safe-area-inset-bottom))`，跟 `.main`/`.m` 用同一套安全区适配手法，滚到底时最后一项前留出足够空间，不会被系统手势条盖住。
+- 已用 Playwright 验证：`.side` 的 `padding-bottom` 正确套用。
+- 复制给明记时：这是通用的安全区适配补漏，直接沿用即可。
