@@ -644,7 +644,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0927a";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0927b";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -2584,25 +2584,59 @@ function startUpdateCheck(){
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){checkForUpdate();if(_swReg)_swReg.update().catch(()=>{});}}); // 从背景切回前台也查一次
 }
 /* ---- 闲置自动登出：区域副经理/人事经理/老板不受限，其余角色(店长/厨师长/员工/
-   中央经理/中央员工)闲置超过30分钟(没有任何点击/打字/滑动)就强制登出，要重新登录。
+   中央经理/中央员工)闲置到 29 分钟时先跳一个「是否继续」的倒数 60 秒提示，
+   60 秒内没有任何操作(含没按『继续使用』)才真的在满 30 分钟那一刻强制登出。
    用"真实身份"判断(curUser.role，不是预览角色 curRole)——管理层用『岗位预览』
    功能假装成店员查看界面时，不会被这条规则误伤强制登出。 */
 const IDLE_LIMIT_MS=30*60*1000;
+const IDLE_WARN_MS=60*1000; // 提前1分钟跳出「是否继续」倒数提示
 let _lastActivity=Date.now();
+let _idleWarnShown=false,_idleWarnT=null;
 function realRole(){return curUser?curUser.role:curRole;}
 function idleExempt(){return ['owner','hrmanager','area'].includes(realRole());}
 function isLoggedInView(){const top=document.querySelector('.top');return !!(top&&top.style.display!=='none');}
 async function forceIdleLogout(){
+  hideIdleWarning();
   _lastActivity=Date.now();
   const msg=LANG==="zh"?'⏱️ 闲置超过30分钟，已自动登出，请重新登录。':'⏱️ Logged out after 30 minutes of inactivity. Please sign in again.';
   try{if(AUTH())await _sb.auth.signOut();}catch(e){}
   curUser=null;
   showLogin(msg);
 }
+/* 倒数 60 秒的「是否继续」提示：任何操作(点继续按钮，或单纯滑动/打字被活动监听器
+   侦测到)都会立刻取消倒数、恢复正常计时；倒数真的归零才会强制登出。 */
+function showIdleWarning(){
+  if(_idleWarnShown)return;_idleWarnShown=true;
+  const zh=LANG==="zh";
+  const ov=document.createElement('div');
+  ov.id='idleWarnOverlay';
+  ov.style.cssText='position:fixed;inset:0;z-index:99998;background:rgba(15,25,45,.6);display:flex;align-items:center;justify-content:center;padding:20px;';
+  ov.innerHTML=`<div style="background:#fff;border-radius:16px;padding:24px 20px;max-width:320px;width:100%;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.3);">
+    <div style="font-size:32px;margin-bottom:8px;">⏱️</div>
+    <div style="font-weight:800;font-size:16px;color:var(--ink);margin-bottom:8px;">${zh?"闲置超时提醒":"Idle Timeout Warning"}</div>
+    <div class="mini" style="margin-bottom:14px;">${zh?"你已经闲置一段时间，":"You've been idle for a while."} <span id="idleWarnCount" style="font-weight:800;color:#d92d20;">60</span> ${zh?"秒后将自动登出。":"s left before logout."}</div>
+    <button class="btn block brand" id="idleContinueBtn">✅ ${zh?"继续使用":"Stay logged in"}</button>
+  </div>`;
+  document.body.appendChild(ov);
+  document.getElementById('idleContinueBtn').onclick=()=>{_lastActivity=Date.now();hideIdleWarning();};
+  _idleWarnT=setInterval(()=>{
+    if(Date.now()-_lastActivity<IDLE_LIMIT_MS-IDLE_WARN_MS){hideIdleWarning();return;} // 倒数期间有活动(滑动/打字/点继续)→取消
+    const remain=Math.max(0,Math.ceil((IDLE_LIMIT_MS-(Date.now()-_lastActivity))/1000));
+    const el=document.getElementById('idleWarnCount');if(el)el.textContent=remain;
+    if(remain<=0)forceIdleLogout();
+  },1000);
+}
+function hideIdleWarning(){
+  if(_idleWarnT){clearInterval(_idleWarnT);_idleWarnT=null;}
+  _idleWarnShown=false;
+  const ov=document.getElementById('idleWarnOverlay');if(ov)ov.remove();
+}
 function idleCheckTick(){
   if(!isLoggedInView())return;
-  if(idleExempt()){_lastActivity=Date.now();return;} // 免限制角色不计闲置，避免万一切回来时立刻被判定超时
-  if(Date.now()-_lastActivity>=IDLE_LIMIT_MS)forceIdleLogout();
+  if(idleExempt()){_lastActivity=Date.now();hideIdleWarning();return;} // 免限制角色不计闲置
+  const idleMs=Date.now()-_lastActivity;
+  if(idleMs>=IDLE_LIMIT_MS){forceIdleLogout();return;}
+  if(idleMs>=IDLE_LIMIT_MS-IDLE_WARN_MS)showIdleWarning();
 }
 function startIdleWatch(){
   _lastActivity=Date.now();
