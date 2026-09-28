@@ -644,7 +644,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0926i";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0927a";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -2583,6 +2583,34 @@ function startUpdateCheck(){
   setInterval(()=>{checkForUpdate();if(_swReg)_swReg.update().catch(()=>{});},5*60*1000); // 每5分钟查一次，顺便叫 sw.js 也主动check
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){checkForUpdate();if(_swReg)_swReg.update().catch(()=>{});}}); // 从背景切回前台也查一次
 }
+/* ---- 闲置自动登出：区域副经理/人事经理/老板不受限，其余角色(店长/厨师长/员工/
+   中央经理/中央员工)闲置超过30分钟(没有任何点击/打字/滑动)就强制登出，要重新登录。
+   用"真实身份"判断(curUser.role，不是预览角色 curRole)——管理层用『岗位预览』
+   功能假装成店员查看界面时，不会被这条规则误伤强制登出。 */
+const IDLE_LIMIT_MS=30*60*1000;
+let _lastActivity=Date.now();
+function realRole(){return curUser?curUser.role:curRole;}
+function idleExempt(){return ['owner','hrmanager','area'].includes(realRole());}
+function isLoggedInView(){const top=document.querySelector('.top');return !!(top&&top.style.display!=='none');}
+async function forceIdleLogout(){
+  _lastActivity=Date.now();
+  const msg=LANG==="zh"?'⏱️ 闲置超过30分钟，已自动登出，请重新登录。':'⏱️ Logged out after 30 minutes of inactivity. Please sign in again.';
+  try{if(AUTH())await _sb.auth.signOut();}catch(e){}
+  curUser=null;
+  showLogin(msg);
+}
+function idleCheckTick(){
+  if(!isLoggedInView())return;
+  if(idleExempt()){_lastActivity=Date.now();return;} // 免限制角色不计闲置，避免万一切回来时立刻被判定超时
+  if(Date.now()-_lastActivity>=IDLE_LIMIT_MS)forceIdleLogout();
+}
+function startIdleWatch(){
+  _lastActivity=Date.now();
+  ['click','keydown','mousemove','touchstart','scroll'].forEach(ev=>{
+    document.addEventListener(ev,()=>{_lastActivity=Date.now();},{passive:true});
+  });
+  setInterval(idleCheckTick,30*1000); // 每30秒检查一次，不用每次滑动/打字都重设计时器，避免手机上耗电/卡顿
+}
 /* 提示音：一声“叮”，响亮 + 约2秒余音（像手机信息提示，WebAudio，无需音频文件）*/
 function primeAudio(){try{_audioCtx=_audioCtx||new (window.AudioContext||window.webkitAudioContext)();if(_audioCtx.state==='suspended')_audioCtx.resume();}catch(e){}}
 function playBeep(){
@@ -4472,6 +4500,7 @@ async function afterAuth(user){
   document.querySelector('.top').style.display='';
   const sb=document.getElementById('sidebar');if(sb)sb.style.display='';
   curPage=firstAllowedPage();render();
+  _lastActivity=Date.now();
   try{startOrderPoll();notifyNewOrders(true);enablePushSub();}catch(e){}
 }
 async function authLogout(){try{if(AUTH())await _sb.auth.signOut();}catch(e){}curUser=null;showAuthLogin();}
@@ -4521,8 +4550,8 @@ async function doResetPassword(){
 }
 
 /* ================= 演示登录（无云端时回退）================= */
-function showLogin(){
-  if(AUTH()){showAuthLogin();return;}   // 有云端 → 走真实登录
+function showLogin(msg){
+  if(AUTH()){showAuthLogin(msg);return;}   // 有云端 → 走真实登录
   document.querySelector('.top').style.display='none';
   const sb=document.getElementById('sidebar');if(sb)sb.style.display='none';
   document.getElementById('pageHost').innerHTML=`
@@ -4530,6 +4559,7 @@ function showLogin(){
     <div style="margin-bottom:10px;"><span class="bh-logo" style="width:118px;height:118px;border-radius:20px;"></span></div>
     <div style="font-weight:800;font-size:19px;color:var(--ink);">牛室炙烤牛排</div>
     <div class="mini" style="margin:4px 0 20px;">${LANG==="zh"?"多分店进销存系统 · 演示登录（未连云端）":"Demo login (no cloud)"}</div>
+    ${msg?`<div class="al al-a" style="text-align:left;">${msg}</div>`:''}
     <div class="fr" style="text-align:left;"><label>${LANG==="zh"?"选择登录角色（演示）":"Login as (demo)"}</label>
       <select id="loginRole">${Object.entries(ROLES).map(([k,v])=>`<option value="${k}">${LANG==="zh"?v.name:v.en}</option>`).join('')}</select></div>
     <button class="btn block brand" style="margin-top:6px;" onclick="doLogin()">🔓 ${LANG==="zh"?"登录进入系统":"Sign In"}</button>
@@ -4542,6 +4572,7 @@ function doLogin(){
   document.querySelector('.top').style.display='';
   const sb=document.getElementById('sidebar');if(sb)sb.style.display='';
   curPage=firstAllowedPage();render();
+  _lastActivity=Date.now();
   try{startOrderPoll();notifyNewOrders(true);}catch(e){}
 }
 function logout(){if(AUTH())authLogout();else showLogin();}
@@ -4575,6 +4606,7 @@ function installApp(){
   try{window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();_deferredPrompt=e;});}catch(e){}
   try{window.addEventListener('click',function(){if(typeof primeAudio==='function')primeAudio();},{once:true});}catch(e){}
   startUpdateCheck();
+  startIdleWatch();
   initCloud();
   // 忘记密码：如果是点了重设密码邮件里的链接跳回来的(URL 带 type=recovery)，
   // 不要走「有 session 就直接登入」这条路——等 onAuthStateChange 的 PASSWORD_RECOVERY
