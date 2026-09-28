@@ -644,7 +644,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0927c";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0927d";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -2499,15 +2499,21 @@ function updateVerBell(){
   bell.style.display=''; // 父层 .top 在登录页本来就是隐藏的，这里不用额外判断登录状态
   const bc=document.getElementById('verBellCount');if(bc)bc.style.display=_updPending?'':'none';
 }
-/* 提示音：跟新订单的 playBeep() 音色不同——两声下滑的清脆"叮咚"，不像订单铃那么急促 */
+/* 版本更新提示音：模仿 iPhone 内建「Tri-tone」提示音的三声上扬琶音风格
+   (G5→C6→E6，一声接一声往上扬)，用 WebAudio 原创合成、不是抓 Apple 的音频档
+   (那是苹果的版权音效，没办法直接内嵌)——但节奏/音符数刻意做成"三音上扬"，
+   一听就有"Tri-tone"那种熟悉的辨识度，也跟新订单的两声"Note"风格铃声区分开。 */
 function playVersionChime(){
   try{primeAudio();if(!_audioCtx)return;const ctx=_audioCtx,now=ctx.currentTime;
-    const master=ctx.createGain();master.connect(ctx.destination);
-    master.gain.setValueAtTime(0.0001,now);
-    master.gain.exponentialRampToValueAtTime(0.6,now+0.02);
-    master.gain.exponentialRampToValueAtTime(0.0001,now+1.4);
-    [[784,now,0.6],[523,now+0.16,0.6]].forEach(([f,t,v])=>{const o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=f;g.gain.value=v;o.connect(g);g.connect(master);o.start(t);o.stop(t+1.2);});
-    try{if(navigator.vibrate)navigator.vibrate([120,80,120]);}catch(e){}
+    [[783.99,0],[1046.50,0.14],[1318.51,0.28]].forEach(([f,delay])=>{
+      const t=now+delay;
+      const master=ctx.createGain();master.connect(ctx.destination);
+      master.gain.setValueAtTime(0.0001,t);
+      master.gain.exponentialRampToValueAtTime(0.85,t+0.01);
+      master.gain.exponentialRampToValueAtTime(0.0001,t+0.5);
+      [[f,1],[f*2,0.3]].forEach(([freq,v])=>{const o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=freq;g.gain.value=v;o.connect(g);g.connect(master);o.start(t);o.stop(t+0.55);});
+    });
+    try{if(navigator.vibrate)navigator.vibrate([150,80,150,80,150]);}catch(e){}
   }catch(e){}
 }
 /* 去服务器抓最新 index.html 文本、比对 BUILD 版本号；manual=true 时(设置页/铃铛手动检查)
@@ -2653,15 +2659,20 @@ function startIdleWatch(){
   });
   setInterval(idleCheckTick,30*1000); // 每30秒检查一次，不用每次滑动/打字都重设计时器，避免手机上耗电/卡顿
 }
-/* 提示音：一声“叮”，响亮 + 约2秒余音（像手机信息提示，WebAudio，无需音频文件）*/
+/* 新订单提示音：模仿 iPhone 内建「Note」提示音的两声清脆上扬叮铃(E6→G6)，
+   WebAudio 原创合成(不是抓 Apple 音频档，那是苹果版权音效)——两声上扬跟版本
+   更新的三声上扬「Tri-tone」风格区分开，听声音就知道是新订单还是系统更新。 */
 function primeAudio(){try{_audioCtx=_audioCtx||new (window.AudioContext||window.webkitAudioContext)();if(_audioCtx.state==='suspended')_audioCtx.resume();}catch(e){}}
 function playBeep(){
   try{primeAudio();if(!_audioCtx)return;const ctx=_audioCtx,now=ctx.currentTime;
-    const master=ctx.createGain();master.connect(ctx.destination);
-    master.gain.setValueAtTime(0.0001,now);
-    master.gain.exponentialRampToValueAtTime(0.85,now+0.015);   // 响亮起音
-    master.gain.exponentialRampToValueAtTime(0.0001,now+2.0);   // 约2秒余音
-    [[988,1],[1319,0.55],[1976,0.28]].forEach(([f,v])=>{const o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=f;g.gain.value=v;o.connect(g);g.connect(master);o.start(now);o.stop(now+2.05);});
+    [[1318.51,0],[1567.98,0.12]].forEach(([f,delay])=>{
+      const t=now+delay;
+      const master=ctx.createGain();master.connect(ctx.destination);
+      master.gain.setValueAtTime(0.0001,t);
+      master.gain.exponentialRampToValueAtTime(0.9,t+0.008);   // 清脆快起音
+      master.gain.exponentialRampToValueAtTime(0.0001,t+0.5);
+      [[f,1],[f*2,0.35],[f*3,0.12]].forEach(([freq,v])=>{const o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=freq;g.gain.value=v;o.connect(g);g.connect(master);o.start(t);o.stop(t+0.55);});
+    });
     try{if(navigator.vibrate)navigator.vibrate([300,120,300]);}catch(e){}
   }catch(e){}
 }
