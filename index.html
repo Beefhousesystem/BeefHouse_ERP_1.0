@@ -644,7 +644,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0927b";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0927c";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -2631,9 +2631,17 @@ function hideIdleWarning(){
   _idleWarnShown=false;
   const ov=document.getElementById('idleWarnOverlay');if(ov)ov.remove();
 }
+/* 正在填一张新增/编辑表单(弹窗 #mbg 开着)时，就算真的坐在那边看着没动手，
+   也不该被判定成"闲置"强制登出——不然会突然把还没按保存的资料弄丢，
+   跟之前"填表单时不给强制更新弹窗打断"是同一个道理，两边共用同一个
+   #mbg 判断标准。只看弹窗有没有开，不看单一输入框有没有聚焦——否则
+   万一员工点进某个输入框就走开，session 会永远不过期，失去闲置登出
+   原本要防"共享设备忘记登出"的意义。 */
+function formOpenNow(){const mbg=document.getElementById('mbg');return !!(mbg&&mbg.classList.contains('show'));}
 function idleCheckTick(){
   if(!isLoggedInView())return;
   if(idleExempt()){_lastActivity=Date.now();hideIdleWarning();return;} // 免限制角色不计闲置
+  if(formOpenNow()){_lastActivity=Date.now();hideIdleWarning();return;} // 表单开着不计闲置，避免冲掉未保存资料
   const idleMs=Date.now()-_lastActivity;
   if(idleMs>=IDLE_LIMIT_MS){forceIdleLogout();return;}
   if(idleMs>=IDLE_LIMIT_MS-IDLE_WARN_MS)showIdleWarning();
