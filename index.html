@@ -644,7 +644,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0930f";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0930g";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -1283,13 +1283,35 @@ function acctNormalBalance(code,from,to){const t=acctType(code);const {dr,cr}=ac
 function usedAccounts(){const s=new Set();ledger().forEach(e=>e.lines.forEach(l=>s.add(l.acc)));return COA.filter(a=>s.has(a.code));}
 
 /* ---- 会计总账页面：总账/试算表/损益表/资产负债表/手动记账分录 ---- */
-let acctTab='tb',acctFrom=null,acctTo=null;
+let acctTab='tb',acctFrom=null,acctTo=null,acctYear=null,acctMonth=null;
 function acctDefaultRange(){const y=TODAY.slice(0,4);return {from:acctFrom||(y+'-01-01'),to:acctTo||TODAY};}
 function setAcctTab(t){acctTab=t;render();window.scrollTo(0,0);}
-function setAcctRange(){acctFrom=(document.getElementById('acct_from')||{}).value||null;acctTo=(document.getElementById('acct_to')||{}).value||null;render();}
+function setAcctRange(){acctMonth=null;acctFrom=(document.getElementById('acct_from')||{}).value||null;acctTo=(document.getElementById('acct_to')||{}).value||null;render();}
 const COA_TYPE_LABEL={asset:{zh:'资产',en:'Assets'},liability:{zh:'负债',en:'Liabilities'},equity:{zh:'权益',en:'Equity'},revenue:{zh:'收入',en:'Revenue'},cogs:{zh:'销售成本',en:'Cost of Sales'},expense:{zh:'营业费用',en:'Expenses'}};
+// 按会计期间(年→月)分开查看，比照 SQL Account 的做法——报表本来就是按"某个会计期间"(月结/年结)来看，
+// 不是漫无边际地一直看全部历史；「自定义」保留原本的日期区间输入，弹性没丢。
+function acctYears(){const s=new Set([TODAY.slice(0,4)]);ledger().forEach(e=>s.add((e.date||'').slice(0,4)));return [...s].sort();}
+function setAcctYear(y){acctYear=y;setAcctMonthTab('ALL');}
+function setAcctMonthTab(m){acctMonth=m;
+  if(!acctYear)acctYear=TODAY.slice(0,4);
+  if(m==='ALL'){acctFrom=acctYear+'-01-01';acctTo=acctYear+'-12-31';}
+  else if(m==='CUSTOM'){/* 保留目前 acctFrom/acctTo，交给使用者自己填 */}
+  else{const [y,mm]=m.split('-').map(Number);const last=new Date(y,mm,0).getDate();acctFrom=m+'-01';acctTo=m+'-'+String(last).padStart(2,'0');}
+  render();window.scrollTo(0,0);
+}
+function acctMonthTabs(){const zh=LANG==="zh";if(!acctYear)acctYear=TODAY.slice(0,4);
+  const years=acctYears();const months=Array.from({length:12},(_,i)=>acctYear+'-'+String(i+1).padStart(2,'0'));
+  return `<div style="margin-bottom:8px;">
+    <div class="mini" style="margin-bottom:4px;opacity:.7;">${zh?'会计期间(比照 SQL Account 按月结/年结查看)：':'Accounting period:'}</div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;">${years.map(y=>`<button class="btn sm ${acctYear===y?'brand':'ghost'}" onclick="setAcctYear('${y}')">${y}</button>`).join('')}</div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;">
+      <button class="btn sm ${acctMonth==='ALL'?'gold':'ghost'}" onclick="setAcctMonthTab('ALL')">${zh?'全年':'Full Year'}</button>
+      ${months.map(m=>`<button class="btn sm ${acctMonth===m?'gold':'ghost'}" onclick="setAcctMonthTab('${m}')">${monthLabel2(m)}</button>`).join('')}
+      <button class="btn sm ${!acctMonth||acctMonth==='CUSTOM'?'gold':'ghost'}" onclick="setAcctMonthTab('CUSTOM')">${zh?'自定义':'Custom'}</button>
+    </div>
+  </div>`;}
 function acctRangeBar(){const zh=LANG==="zh";const {from,to}=acctDefaultRange();
-  return `<div class="fg2" style="margin-bottom:10px;"><div class="fr"><label>${zh?'开始日期':'From'}</label><input id="acct_from" type="date" value="${from}" onchange="setAcctRange()"></div><div class="fr"><label>${zh?'结束日期':'To'}</label><input id="acct_to" type="date" value="${to}" onchange="setAcctRange()"></div></div>`;}
+  return `${acctMonthTabs()}${(!acctMonth||acctMonth==='CUSTOM')?`<div class="fg2" style="margin-bottom:10px;"><div class="fr"><label>${zh?'开始日期':'From'}</label><input id="acct_from" type="date" value="${from}" onchange="setAcctRange()"></div><div class="fr"><label>${zh?'结束日期':'To'}</label><input id="acct_to" type="date" value="${to}" onchange="setAcctRange()"></div></div>`:''}`;}
 function trialBalanceHTML(){const zh=LANG==="zh";const {to}=acctDefaultRange();
   let td=0,tc=0;
   const rows=usedAccounts().map(a=>{const bal=acctNormalBalance(a.code,null,to);const isDr=['asset','cogs','expense'].includes(a.type);const dr=isDr?Math.max(bal,0):Math.max(-bal,0);const cr=isDr?Math.max(-bal,0):Math.max(bal,0);td+=dr;tc+=cr;
@@ -1586,19 +1608,57 @@ function saveManualJE(){const zh=LANG==="zh";const date=document.getElementById(
   postEntry(date,desc,lines,'manual:'+Date.now(),nextDocNo(type));auditLog(zh?"手动记账":"Manual JE",desc,"",money(td));
   save();closeM();render();
 }
+// 报表标题(比照马来西亚法定报表惯用中英对照名称，正式打印/存档用)
+const ACCT_REPORT_TITLE={
+  tb:{zh:'试算表',en:'Trial Balance'},pl:{zh:'损益表',en:'Profit & Loss Statement'},bs:{zh:'资产负债表',en:'Statement of Financial Position (Balance Sheet)'},
+  cf:{zh:'现金流量表',en:'Statement of Cash Flows'},aging:{zh:'应付账龄分析表',en:'Aged Creditors Analysis'},araging:{zh:'应收账龄分析表',en:'Aged Debtors Analysis'},
+  sst:{zh:'SST参考报表',en:'SST Reference Report'},gl:{zh:'总账流水',en:'General Ledger'}
+};
+// 哪几张是"某一时点"(as at)、哪几张是"某段期间"(for the period)——马来西亚财报惯例：
+// 资产负债表/账龄分析是某一天的快照；损益表/现金流量表/试算表/总账流水是一段期间的累计。
+const ACCT_AS_AT=['bs','aging','araging'];
+function acctPeriodLabel(){const zh=LANG==="zh";const {from,to}=acctDefaultRange();
+  return ACCT_AS_AT.includes(acctTab)?(zh?`截至 ${to}`:`As At ${to}`):(zh?`呈报期间：${from} 至 ${to}`:`For the period ${from} to ${to}`);}
+function printAcctReport(){const zh=LANG==="zh";const title=ACCT_REPORT_TITLE[acctTab]||{zh:'报表',en:'Report'};
+  const pages={tb:trialBalanceHTML,pl:plHTML,bs:bsHTML,cf:cfHTML,aging:apAgingHTML,araging:arAgingHTML,sst:sstReportHTML,gl:glHTML};
+  const fn=pages[acctTab];if(!fn)return;
+  const doc=`<div id="invoiceDoc" style="padding:4px;">
+    <div style="text-align:center;margin-bottom:14px;border-bottom:2px solid #12203A;padding-bottom:10px;">
+      <div style="font-weight:900;font-size:17px;">${oEsc(t2('appTitle'))}</div>
+      <div class="mini">${oEsc(nm(outletObj()))}</div>
+      <div style="font-weight:800;font-size:15px;margin-top:8px;">${zh?title.zh:title.en}${zh?(' '+title.en):''}</div>
+      <div class="mini">${acctPeriodLabel()}</div>
+    </div>
+    ${fn()}
+    <div class="mini" style="margin-top:16px;display:flex;justify-content:space-between;border-top:1px solid #ddd;padding-top:8px;">
+      <span>${zh?'制表':'Prepared by'}: ${oEsc(curUser?curUser.name:ROLES[curRole].name)}</span>
+      <span>${zh?'生成时间':'Generated'}: ${new Date().toLocaleString('en-GB')}</span>
+    </div>
+  </div>`;
+  openForm(payHead('🖨️ '+(zh?title.zh:title.en))+`<div style="max-height:76vh;overflow:auto;">${doc}</div>`);
+  const mb=document.getElementById('mbox');if(mb)mb.classList.add('m-wide');
+}
+function exportAcctTableCSV(){const zh=LANG==="zh";const wrap=document.getElementById('accTabBody');const table=wrap?wrap.querySelector('table'):null;
+  if(!table){alert(zh?'此分页没有可导出的表格':'No table to export on this tab');return;}
+  const rows=[...table.querySelectorAll('tr')].map(tr=>[...tr.children].map(td=>td.textContent.replace(/\s+/g,' ').trim()));
+  downloadCSV(acctTab+'_'+TODAY+'.csv',rows);
+  auditLog(zh?"导出会计报表":"Export accounting report",acctTab+' '+TODAY,"","");
+}
 function pgAccounting(){const zh=LANG==="zh";
   if(isAgg())return `<div class="fb"><h2 class="h" style="margin:0;">📒 ${zh?'会计总账':'Accounting'}</h2></div><div class="hint">${zh?'请在右上角切换到某一分店查看该店的账本。':'Switch to a branch.'}</div>`;
   const tabs=[['tb',zh?'试算表':'Trial Balance'],['pl',zh?'损益表':'P&L'],['bs',zh?'资产负债表':'Balance Sheet'],['cf',zh?'现金流量表':'Cash Flow'],
     ['salesclose',zh?'销售结账':'Sales Closing'],['ar',zh?'应收账款':'AR'],['araging',zh?'应收账龄':'AR Aging'],['aging',zh?'应付账龄':'AP Aging'],
     ['bankrec',zh?'银行对账':'Bank Rec'],['fa',zh?'固定资产':'Fixed Assets'],['sst',zh?'SST报表':'SST'],['gl',zh?'总账流水':'Ledger']];
-  const needsRange=['tb','pl','bs','cf','gl','sst'].includes(acctTab);
+  const needsRange=['tb','pl','bs','cf','gl','sst','aging','araging'].includes(acctTab);
+  const printable=['tb','pl','bs','cf','aging','araging','sst','gl'].includes(acctTab);
   const pages={tb:trialBalanceHTML,pl:plHTML,bs:bsHTML,cf:cfHTML,salesclose:salesCloseHTML,ar:arHTML,araging:arAgingHTML,aging:apAgingHTML,bankrec:bankRecHTML,fa:faHTML,sst:sstReportHTML,gl:glHTML};
   const fn=pages[acctTab]||trialBalanceHTML;
   return `<div class="fb"><h2 class="h" style="margin:0;">📒 ${zh?'会计总账':'Accounting'} <span class="tag">v${BUILD}</span></h2></div>
   <div class="al al-a" style="margin-bottom:10px;">⚠️ ${zh?'这是独立于原本营运成本追踪的复式记账层，格式/单据编号比照 SQL Account 设计，方便财务人员/会计师适应。正式拿给会计师/审计使用前，请务必请专业人士核对科目与金额是否正确。':'This double-entry layer mirrors SQL Account\'s format/document numbering. Have a professional verify before using for audit/filing.'}</div>
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">${tabs.map(([k,l])=>`<button class="btn sm ${acctTab===k?'brand':'ghost'}" onclick="setAcctTab('${k}')">${l}</button>`).join('')}</div>
   ${needsRange?acctRangeBar():''}
-  ${fn()}`;
+  ${printable?`<div style="display:flex;gap:8px;margin-bottom:10px;"><button class="btn brand sm" onclick="printAcctReport()">🖨️ ${zh?'打印/下载PDF':'Print/Save PDF'}</button><button class="btn ghost sm" onclick="exportAcctTableCSV()">📋 ${zh?'导出CSV':'Export CSV'}</button></div>`:''}
+  <div id="accTabBody">${fn()}</div>`;
 }
 // 一份销量对应的「食材消耗表」（展开多级 BOM）
 function salesConsumption(salesArr){
