@@ -490,3 +490,4 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 2. **隐藏 OT 倍数**：`payslipHTML()` 原本 OT 那一行显示「加班 OT (5.5h×1.5)」，倍数会暴露给拿到 Payslip 的员工看到公司给的 OT 倍率——改成新函数 `hoursMin(otHours)` 把小数时数转成「5h 30m」这种时分格式，Payslip 上只显示「加班 OT (5h 30m)」，不再有「×倍数」这一段。**只改了 Payslip 这个员工实际会拿到看的文件**——`pgPayrun()`薪资发放表格里 HR 自己编辑用的 OT 倍数下拉选单完全不受影响，HR 照样能设定/看到倍数，只是不会印在给员工的 Payslip 上。
 - 已用 Playwright 验证：给一位测试员工设定津贴/奖励/公共假期/OT 覆盖值后，`computeRow` 正确把公共假期计入 `gross`；生成的 Payslip HTML 确认**不含 `×` 符号**、含有正确的"Xh Ym"格式字串、含有公共假期金额那一行。
 - 复制给明记时：这两项都是通用的薪资功能改善，直接沿用即可。
+✅ **后续更新**：已同步搬到 `Mengkeesystem/ERP-testing-1.0`（含 CP39/Borang A/8A/银行代发/EA表、员工银行字段、公共假期栏位、Payslip隐藏OT倍数），用 Playwright 验证 `computeRow`/`hoursMin`/`payslipHTML`/四个导出函数/EA表生成均正常，BUILD `0930mk62`，已推送到 main。
