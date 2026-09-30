@@ -644,7 +644,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0930a";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0930b";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -1171,6 +1171,197 @@ function invReduce(name,qty){ // 出库/扣减（FIFO 扣批次）
 }
 // 反做一笔进货（编辑/删除时用）：扣回数量（成本不追溯还原）
 function invUnreceive(name,qty){invReduce(name,qty);}
+
+/* ================= 会计总账引擎（复式记账，取代部分 SQL Account 功能）=================
+   科目表 COA + postEntry() 记账函数(强制借贷平衡) + 总账/试算表/损益表/资产负债表。
+   ⚠️ 这是营运追踪之外、另一套独立的会计层——目前只对「报废损耗/招待赠送/运营开销记录/
+   应付账款付款/薪资发放核定」这几个已有明确触发点的交易自动过账；销售收入与进货入库
+   因为涉及更复杂的按日汇总/供应商挂账设计，暂时靠手动记账分录补齐(见 pgAccounting 的
+   『手动记账』)，之后可以再排期把这两块也接上自动过账。正式拿去给会计师/审计使用前，
+   务必请他们核对科目表与过账规则是否符合公司实际情况。 */
+const COA=[
+  // 资产
+  {code:'1000',name:'现金',name_en:'Cash on Hand',type:'asset'},
+  {code:'1010',name:'银行户口',name_en:'Bank Account',type:'asset'},
+  {code:'1020',name:'应收账款',name_en:'Accounts Receivable',type:'asset'},
+  {code:'1030',name:'库存-食材',name_en:'Inventory - Food & Beverage',type:'asset'},
+  {code:'1031',name:'库存-包材',name_en:'Inventory - Packaging',type:'asset'},
+  {code:'1040',name:'预付费用',name_en:'Prepaid Expenses',type:'asset'},
+  {code:'1100',name:'厨房设备',name_en:'Kitchen Equipment',type:'asset'},
+  {code:'1101',name:'累计折旧-厨房设备',name_en:'Acc. Depreciation - Kitchen Equip.',type:'asset'},
+  {code:'1110',name:'家具装修',name_en:'Furniture & Renovation',type:'asset'},
+  {code:'1111',name:'累计折旧-家具装修',name_en:'Acc. Depreciation - Furniture',type:'asset'},
+  {code:'1130',name:'押金',name_en:'Deposits',type:'asset'},
+  // 负债
+  {code:'2000',name:'应付账款',name_en:'Accounts Payable',type:'liability'},
+  {code:'2010',name:'应付薪金',name_en:'Salaries Payable',type:'liability'},
+  {code:'2011',name:'应付EPF-雇主',name_en:'EPF Payable - Employer',type:'liability'},
+  {code:'2012',name:'应付EPF-雇员',name_en:'EPF Payable - Employee',type:'liability'},
+  {code:'2013',name:'应付SOCSO',name_en:'SOCSO Payable',type:'liability'},
+  {code:'2014',name:'应付EIS',name_en:'EIS Payable',type:'liability'},
+  {code:'2015',name:'应付PCB',name_en:'PCB Payable',type:'liability'},
+  {code:'2016',name:'应付SL24J',name_en:'SL24J Payable',type:'liability'},
+  {code:'2020',name:'应付SST',name_en:'SST Payable',type:'liability'},
+  {code:'2030',name:'应计费用',name_en:'Accrued Expenses',type:'liability'},
+  {code:'2100',name:'银行贷款',name_en:'Bank Loan',type:'liability'},
+  // 权益
+  {code:'3000',name:'业主资本',name_en:"Owner's Capital",type:'equity'},
+  {code:'3010',name:'保留盈余',name_en:'Retained Earnings',type:'equity'},
+  {code:'3030',name:'业主提款',name_en:'Drawings',type:'equity'},
+  // 收入
+  {code:'4000',name:'自助餐收入',name_en:'Buffet Sales',type:'revenue'},
+  {code:'4010',name:'单点销售',name_en:'A La Carte Sales',type:'revenue'},
+  {code:'4020',name:'饮料销售',name_en:'Beverage Sales',type:'revenue'},
+  {code:'4030',name:'宴会/包场收入',name_en:'Event/Banquet Income',type:'revenue'},
+  {code:'4040',name:'服务费收入',name_en:'Service Charge',type:'revenue'},
+  {code:'4090',name:'其他营业收入',name_en:'Other Income',type:'revenue'},
+  {code:'7000',name:'利息收入',name_en:'Interest Income',type:'revenue'},
+  // 销售成本
+  {code:'5000',name:'食材成本-自助餐',name_en:'COGS - Buffet',type:'cogs'},
+  {code:'5010',name:'食材成本-单点BOM',name_en:'COGS - A La Carte',type:'cogs'},
+  {code:'5020',name:'饮料成本',name_en:'COGS - Beverage',type:'cogs'},
+  {code:'5030',name:'包材成本',name_en:'COGS - Packaging',type:'cogs'},
+  {code:'5090',name:'报废损耗',name_en:'Waste & Spoilage',type:'cogs'},
+  {code:'5091',name:'招待/赠送成本',name_en:'Complimentary/Offer',type:'cogs'},
+  // 营业费用
+  {code:'6000',name:'薪金',name_en:'Salaries & Wages',type:'expense'},
+  {code:'6010',name:'加班费',name_en:'Overtime',type:'expense'},
+  {code:'6011',name:'公共假期津贴',name_en:'Public Holiday Pay',type:'expense'},
+  {code:'6012',name:'奖励/花红',name_en:'Incentive/Bonus',type:'expense'},
+  {code:'6020',name:'EPF-雇主',name_en:'EPF - Employer',type:'expense'},
+  {code:'6021',name:'SOCSO-雇主',name_en:'SOCSO - Employer',type:'expense'},
+  {code:'6022',name:'EIS-雇主',name_en:'EIS - Employer',type:'expense'},
+  {code:'6023',name:'人头税',name_en:'Foreign Worker Levy',type:'expense'},
+  {code:'6100',name:'租金',name_en:'Rent',type:'expense'},
+  {code:'6101',name:'佣金',name_en:'Commission',type:'expense'},
+  {code:'6110',name:'电费',name_en:'Electricity',type:'expense'},
+  {code:'6111',name:'水费',name_en:'Water',type:'expense'},
+  {code:'6112',name:'煤气费',name_en:'Gas',type:'expense'},
+  {code:'6120',name:'营销与广告',name_en:'Marketing & Advertising',type:'expense'},
+  {code:'6130',name:'维修与保养',name_en:'Maintenance & Repair',type:'expense'},
+  {code:'6140',name:'Wi-Fi/网络费',name_en:'Wi-Fi/Internet',type:'expense'},
+  {code:'6150',name:'垃圾清理',name_en:'Rubbish Collection',type:'expense'},
+  {code:'6160',name:'POS月租',name_en:'POS SaaS',type:'expense'},
+  {code:'6170',name:'会计费',name_en:'Accounting Fee',type:'expense'},
+  {code:'6180',name:'保险费',name_en:'Insurance',type:'expense'},
+  {code:'6190',name:'折旧费用',name_en:'Depreciation Expense',type:'expense'},
+  {code:'6200',name:'银行手续费',name_en:'Bank Charges',type:'expense'},
+  {code:'6210',name:'杂项开销',name_en:'Miscellaneous',type:'expense'},
+  {code:'7100',name:'利息支出',name_en:'Interest Expense',type:'expense'},
+  {code:'7900',name:'税务费用',name_en:'Tax Expense',type:'expense'},
+];
+function coaOf(code){return COA.find(a=>a.code===code);}
+function acctName(code){const a=coaOf(code);if(!a)return code;return (LANG==="zh"?a.name:a.name_en)+' ('+code+')';}
+function acctType(code){const a=coaOf(code);return a?a.type:'';}
+function ledger(){if(!d().ledger)d().ledger=[];return d().ledger;}
+// lines: [{acc:'1000',dr:100},{acc:'4000',cr:100}, ...] —— 必须借贷合计相等才会记账
+function postEntry(date,desc,lines,ref){
+  lines=(lines||[]).filter(l=>l&&l.acc&&(+l.dr||+l.cr));
+  const dr=lines.reduce((a,l)=>a+(+l.dr||0),0),cr=lines.reduce((a,l)=>a+(+l.cr||0),0);
+  if(!lines.length||Math.abs(dr-cr)>0.01){console.error('借贷不平衡，拒绝记账',date,desc,lines,dr,cr);return false;}
+  ledger().push({id:(ledger().reduce((m,e)=>Math.max(m,e.id||0),0)+1),date,desc:desc||'',ref:ref||'',lines,by:curUser?curUser.name:ROLES[curRole].name,ts:Date.now()});
+  return true;
+}
+function delEntry(id){const l=ledger();const i=l.findIndex(e=>e.id===id);if(i<0)return;if(!confirm(LANG==="zh"?"删除此记账分录？(不可复原)":"Delete this entry?"))return;l.splice(i,1);auditLog("删除记账分录","#"+id,"","");save();render();}
+// 某科目在某日期区间内的借/贷合计
+function acctPeriod(code,from,to){let dr=0,cr=0;ledger().forEach(e=>{if((from&&e.date<from)||(to&&e.date>to))return;e.lines.forEach(l=>{if(l.acc===code){dr+=+l.dr||0;cr+=+l.cr||0;}});});return {dr,cr};}
+// 该科目的「正常余额」方向：资产/成本/费用正常在借方；负债/权益/收入正常在贷方
+function acctNormalBalance(code,from,to){const t=acctType(code);const {dr,cr}=acctPeriod(code,from,to);return ['asset','cogs','expense'].includes(t)?(dr-cr):(cr-dr);}
+function usedAccounts(){const s=new Set();ledger().forEach(e=>e.lines.forEach(l=>s.add(l.acc)));return COA.filter(a=>s.has(a.code));}
+
+/* ---- 会计总账页面：总账/试算表/损益表/资产负债表/手动记账分录 ---- */
+let acctTab='tb',acctFrom=null,acctTo=null;
+function acctDefaultRange(){const y=TODAY.slice(0,4);return {from:acctFrom||(y+'-01-01'),to:acctTo||TODAY};}
+function setAcctTab(t){acctTab=t;render();window.scrollTo(0,0);}
+function setAcctRange(){acctFrom=(document.getElementById('acct_from')||{}).value||null;acctTo=(document.getElementById('acct_to')||{}).value||null;render();}
+const COA_TYPE_LABEL={asset:{zh:'资产',en:'Assets'},liability:{zh:'负债',en:'Liabilities'},equity:{zh:'权益',en:'Equity'},revenue:{zh:'收入',en:'Revenue'},cogs:{zh:'销售成本',en:'Cost of Sales'},expense:{zh:'营业费用',en:'Expenses'}};
+function acctRangeBar(){const zh=LANG==="zh";const {from,to}=acctDefaultRange();
+  return `<div class="fg2" style="margin-bottom:10px;"><div class="fr"><label>${zh?'开始日期':'From'}</label><input id="acct_from" type="date" value="${from}" onchange="setAcctRange()"></div><div class="fr"><label>${zh?'结束日期':'To'}</label><input id="acct_to" type="date" value="${to}" onchange="setAcctRange()"></div></div>`;}
+function trialBalanceHTML(){const zh=LANG==="zh";const {to}=acctDefaultRange();
+  let td=0,tc=0;
+  const rows=usedAccounts().map(a=>{const bal=acctNormalBalance(a.code,null,to);const isDr=['asset','cogs','expense'].includes(a.type);const dr=isDr?Math.max(bal,0):Math.max(-bal,0);const cr=isDr?Math.max(-bal,0):Math.max(bal,0);td+=dr;tc+=cr;
+    if(Math.abs(dr)<0.005&&Math.abs(cr)<0.005)return '';
+    return `<tr><td>${acctName(a.code)}</td><td class="c">${dr>0.005?money(dr):''}</td><td class="c">${cr>0.005?money(cr):''}</td></tr>`;}).join('');
+  const balanced=Math.abs(td-tc)<0.01;
+  return `<div class="hint">${zh?`试算表(Trial Balance)：截至 ${to} 累计余额，借贷合计必须相等——这是复式记账最基本的自我检查。`:`Trial Balance as at ${to}.`}</div>
+  <div class="card tbl"><table><thead><tr><th>${zh?'科目':'Account'}</th><th class="c">${zh?'借方':'Debit'}</th><th class="c">${zh?'贷方':'Credit'}</th></tr></thead><tbody>${rows||`<tr><td colspan="3" class="empty">${zh?'暂无记账分录':'No entries yet'}</td></tr>`}</tbody>
+  <tfoot><tr style="background:#FAFBFC;font-weight:800;"><td>${zh?'合计':'Total'}</td><td class="c">${money(td)}</td><td class="c">${money(tc)}</td></tr></tfoot></table></div>
+  <div class="al ${balanced?'':'al-r'}" style="margin-top:8px;">${balanced?('✅ '+(zh?'借贷平衡':'Balanced')):('⚠️ '+(zh?'借贷不平衡！请检查记账分录':'Out of balance!'))}</div>`;
+}
+function plHTML(){const zh=LANG==="zh";const {from,to}=acctDefaultRange();
+  const rev=COA.filter(a=>a.type==='revenue'),cogs=COA.filter(a=>a.type==='cogs'),exp=COA.filter(a=>a.type==='expense');
+  const sum=arr=>arr.reduce((s,a)=>s+acctNormalBalance(a.code,from,to),0);
+  const revT=sum(rev),cogsT=sum(cogs),expT=sum(exp);const gp=revT-cogsT;const np=gp-expT;
+  const rowsOf=arr=>arr.map(a=>{const v=acctNormalBalance(a.code,from,to);return Math.abs(v)<0.005?'':`<tr><td class="mini">${acctName(a.code)}</td><td class="c">${money(v)}</td></tr>`;}).join('');
+  return `<div class="hint">${zh?`损益表(P&amp;L)：${from} 至 ${to} 期间。`:`Income Statement: ${from} to ${to}.`}</div>
+  <div class="card tbl"><table><tbody>
+    <tr style="background:#FAFBFC;font-weight:800;"><td>${zh?'收入 Revenue':'Revenue'}</td><td class="c"></td></tr>${rowsOf(rev)}
+    <tr style="font-weight:800;"><td>${zh?'收入合计':'Total Revenue'}</td><td class="c">${money(revT)}</td></tr>
+    <tr style="background:#FAFBFC;font-weight:800;"><td>${zh?'销售成本 COGS':'Cost of Sales'}</td><td class="c"></td></tr>${rowsOf(cogs)}
+    <tr style="font-weight:800;"><td>${zh?'成本合计':'Total COGS'}</td><td class="c">${money(cogsT)}</td></tr>
+    <tr style="font-weight:800;border-top:2px solid #333;"><td>${zh?'毛利 Gross Profit':'Gross Profit'}</td><td class="c">${money(gp)}</td></tr>
+    <tr style="background:#FAFBFC;font-weight:800;"><td>${zh?'营业费用 Expenses':'Operating Expenses'}</td><td class="c"></td></tr>${rowsOf(exp)}
+    <tr style="font-weight:800;"><td>${zh?'费用合计':'Total Expenses'}</td><td class="c">${money(expT)}</td></tr>
+    <tr style="font-weight:800;border-top:2px solid #333;background:#FAFBFC;"><td>${zh?(np>=0?'净利 Net Profit':'净亏损 Net Loss'):(np>=0?'Net Profit':'Net Loss')}</td><td class="c" style="color:${np>=0?'var(--green)':'var(--red)'};">${money(np)}</td></tr>
+  </tbody></table></div>`;
+}
+function bsHTML(){const zh=LANG==="zh";const {to}=acctDefaultRange();
+  const asset=COA.filter(a=>a.type==='asset'),liab=COA.filter(a=>a.type==='liability'),eq=COA.filter(a=>a.type==='equity');
+  const sum=arr=>arr.reduce((s,a)=>s+acctNormalBalance(a.code,null,to),0);
+  // 累计损益(从有记录以来到 to)并进权益，让资产负债表恒等式成立
+  const pnl=COA.filter(a=>a.type==='revenue').reduce((s,a)=>s+acctNormalBalance(a.code,null,to),0)
+    -COA.filter(a=>a.type==='cogs'||a.type==='expense').reduce((s,a)=>s+acctNormalBalance(a.code,null,to),0);
+  const assetT=sum(asset),liabT=sum(liab),eqBase=sum(eq),eqT=eqBase+pnl;
+  const rowsOf=arr=>arr.map(a=>{const v=acctNormalBalance(a.code,null,to);return Math.abs(v)<0.005?'':`<tr><td class="mini">${acctName(a.code)}</td><td class="c">${money(v)}</td></tr>`;}).join('');
+  return `<div class="hint">${zh?`资产负债表(Balance Sheet)：截至 ${to}。`:`Balance Sheet as at ${to}.`}</div>
+  <div class="card tbl"><table><tbody>
+    <tr style="background:#FAFBFC;font-weight:800;"><td>${zh?'资产 Assets':'Assets'}</td><td class="c"></td></tr>${rowsOf(asset)}
+    <tr style="font-weight:800;border-top:2px solid #333;"><td>${zh?'资产合计':'Total Assets'}</td><td class="c">${money(assetT)}</td></tr>
+    <tr style="background:#FAFBFC;font-weight:800;"><td>${zh?'负债 Liabilities':'Liabilities'}</td><td class="c"></td></tr>${rowsOf(liab)}
+    <tr style="font-weight:800;"><td>${zh?'负债合计':'Total Liabilities'}</td><td class="c">${money(liabT)}</td></tr>
+    <tr style="background:#FAFBFC;font-weight:800;"><td>${zh?'权益 Equity':'Equity'}</td><td class="c"></td></tr>${rowsOf(eq)}
+    <tr><td class="mini">${zh?'本期(累计)盈余 Retained Profit':'Cumulative Profit'}</td><td class="c">${money(pnl)}</td></tr>
+    <tr style="font-weight:800;"><td>${zh?'权益合计':'Total Equity'}</td><td class="c">${money(eqT)}</td></tr>
+    <tr style="font-weight:800;border-top:2px solid #333;background:#FAFBFC;"><td>${zh?'负债+权益合计':'Total Liab.+Equity'}</td><td class="c">${money(liabT+eqT)}</td></tr>
+  </tbody></table></div>
+  <div class="al ${Math.abs(assetT-(liabT+eqT))<0.01?'':'al-r'}" style="margin-top:8px;">${Math.abs(assetT-(liabT+eqT))<0.01?('✅ '+(zh?'资产 = 负债 + 权益，恒等式成立':'Balanced')):('⚠️ '+(zh?'不平衡，请检查记账分录':'Out of balance!'))}</div>`;
+}
+function glHTML(){const zh=LANG==="zh";const {from,to}=acctDefaultRange();const w=['owner','hrmanager'].includes(curRole);
+  const entries=ledger().filter(e=>e.date>=from&&e.date<=to).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.ts-a.ts);
+  const rows=entries.map(e=>{
+    const lines=e.lines.map(l=>`<div>${acctName(l.acc)}：${l.dr?('Dr '+money(l.dr)):('Cr '+money(l.cr))}</div>`).join('');
+    return `<tr><td class="mini">${e.date}</td><td>${oEsc(e.desc)}${e.ref?`<div class="mini" style="opacity:.6;">ref: ${oEsc(e.ref)}</div>`:''}</td><td class="mini">${lines}</td><td class="mini">${oEsc(e.by||'')}</td>${w?`<td><button class="ib" onclick="delEntry(${e.id})">🗑️</button></td>`:''}</tr>`;}).join('');
+  return `<div class="hint">${zh?'总账流水(General Ledger)：每一笔记账分录，来源可能是自动过账(报废/招待/应付付款/薪资)或手动记账。':'Every posted journal entry.'}</div>
+  <button class="btn brand sm" style="margin-bottom:8px;" onclick="formManualJE()">+ ${zh?'手动记账分录':'Manual Journal Entry'}</button>
+  <div class="card tbl"><table><thead><tr><th>${zh?'日期':'Date'}</th><th>${zh?'摘要':'Description'}</th><th>${zh?'分录':'Lines'}</th><th>${zh?'记录人':'By'}</th>${w?'<th></th>':''}</tr></thead><tbody>${rows||`<tr><td colspan="5" class="empty">${zh?'暂无记账分录':'No entries yet'}</td></tr>`}</tbody></table></div>`;
+}
+function coaOptsHTML(sel){return COA.map(a=>`<option value="${a.code}" ${sel===a.code?'selected':''}>${a.code} ${LANG==="zh"?a.name:a.name_en}</option>`).join('');}
+function formManualJE(){const zh=LANG==="zh";
+  openForm(`<h3>📒 ${zh?'手动记账分录':'Manual Journal Entry'} <span class="x" onclick="closeM()">×</span></h3>
+    <div class="hint">${zh?'用于销售收入汇总、进货入库、期初余额、或其他还没自动接上的交易——借贷合计必须相等才能保存，可自行增加行数。':'Debit total must equal credit total.'}</div>
+    <div class="fg2"><div class="fr"><label>${zh?'日期':'Date'}</label><input id="je_date" type="date" value="${TODAY}"></div><div class="fr"><label>${zh?'摘要':'Description'}</label><input id="je_desc"></div></div>
+    <div id="je_lines">
+      ${[0,1,2,3].map(i=>`<div class="fg3" style="margin-bottom:4px;"><div class="fr"><label>${zh?'科目':'Account'}</label><select id="je_acc${i}"><option value="">—</option>${coaOptsHTML('')}</select></div><div class="fr"><label>${zh?'借方 Dr':'Debit'}</label><input id="je_dr${i}" type="number" step="0.01"></div><div class="fr"><label>${zh?'贷方 Cr':'Credit'}</label><input id="je_cr${i}" type="number" step="0.01"></div></div>`).join('')}
+    </div>
+    <button class="btn block brand" onclick="saveManualJE()">${zh?'保存(自动检查借贷平衡)':'Save (checks balance)'}</button>`);
+}
+function saveManualJE(){const zh=LANG==="zh";const date=document.getElementById('je_date').value||TODAY;const desc=document.getElementById('je_desc').value.trim();
+  const lines=[];for(let i=0;i<4;i++){const acc=(document.getElementById('je_acc'+i)||{}).value;const dr=+((document.getElementById('je_dr'+i)||{}).value)||0;const cr=+((document.getElementById('je_cr'+i)||{}).value)||0;if(acc&&(dr||cr))lines.push({acc,dr,cr});}
+  const td=lines.reduce((s,l)=>s+l.dr,0),tc=lines.reduce((s,l)=>s+l.cr,0);
+  if(!lines.length){alert(zh?'请至少填两行':'Fill in at least two lines');return;}
+  if(Math.abs(td-tc)>0.01){alert(zh?`借贷不平衡：借方合计 ${money(td)}，贷方合计 ${money(tc)}，请修正后再保存。`:`Out of balance: Dr ${money(td)} vs Cr ${money(tc)}`);return;}
+  postEntry(date,desc,lines,'manual:'+Date.now());auditLog(zh?"手动记账":"Manual JE",desc,"",money(td));
+  save();closeM();render();
+}
+function pgAccounting(){const zh=LANG==="zh";
+  if(isAgg())return `<div class="fb"><h2 class="h" style="margin:0;">📒 ${zh?'会计总账':'Accounting'}</h2></div><div class="hint">${zh?'请在右上角切换到某一分店查看该店的账本。':'Switch to a branch.'}</div>`;
+  const tabs=[['tb',zh?'试算表':'Trial Balance'],['pl',zh?'损益表':'P&L'],['bs',zh?'资产负债表':'Balance Sheet'],['gl',zh?'总账流水':'Ledger']];
+  return `<div class="fb"><h2 class="h" style="margin:0;">📒 ${zh?'会计总账':'Accounting'} <span class="tag">v${BUILD}</span></h2></div>
+  <div class="al al-a" style="margin-bottom:10px;">⚠️ ${zh?'这是独立于原本营运成本追踪的复式记账层。目前只有报废损耗/招待赠送/运营开销记录/应付账款付款/薪资发放核定会自动过账；销售收入与进货入库还没接上自动过账，需要用下面「总账流水→手动记账分录」自行补上。正式拿给会计师/审计使用前，请务必请专业人士核对科目与金额是否正确。':'This double-entry layer auto-posts waste/offers/opex log/AP payment/payroll only; sales & purchases need manual entries for now. Have a professional verify before using for audit/filing.'}</div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">${tabs.map(([k,l])=>`<button class="btn sm ${acctTab===k?'brand':'ghost'}" onclick="setAcctTab('${k}')">${l}</button>`).join('')}</div>
+  ${acctRangeBar()}
+  ${acctTab==='tb'?trialBalanceHTML():acctTab==='pl'?plHTML():acctTab==='bs'?bsHTML():glHTML()}`;
+}
 // 一份销量对应的「食材消耗表」（展开多级 BOM）
 function salesConsumption(salesArr){
   const map={};const b=d();
@@ -1238,7 +1429,7 @@ function auditLog(act,detail,oldv,newv){
 function can(p){return ROLES[curRole].can.includes(p);}
 // 作业中心(proc)只要拥有任一子作业权限即可进入；子页与页面级访问统一由 pageAllowed 判定
 function hasAnyOp(){return ['proc','transfer','waste','ent','stock'].some(p=>can(p));}
-function pageAllowed(p){if(p==='proc')return hasAnyOp();if(p==='monthly')return can('report');if(p==='opexm')return can('opex');if(p==='payrun')return can('payroll')&&canRunPayroll();if(p==='orderinv')return ['owner','hrmanager','area','manager','headchef'].includes(curRole);if(typeof PROC_SUB!=='undefined'&&PROC_SUB[p])return can(PROC_SUB[p]);return can(p);}
+function pageAllowed(p){if(p==='proc')return hasAnyOp();if(p==='monthly')return can('report');if(p==='opexm')return can('opex');if(p==='payrun')return can('payroll')&&canRunPayroll();if(p==='orderinv')return ['owner','hrmanager','area','manager','headchef'].includes(curRole);if(p==='accounting')return ['owner','hrmanager','area'].includes(curRole);if(typeof PROC_SUB!=='undefined'&&PROC_SUB[p])return can(PROC_SUB[p]);return can(p);}
 function firstAllowedPage(){const order=['dash','attend','leave','payroll','hr','schedule','sales','inv','proc','ck','stock','opex','ap','bom','report','settings'];for(const p of order)if(pageAllowed(p))return p;return 'dash';}
 function canW(p){if(p==='payroll')return can(p)&&!isAgg()&&canRunPayroll();return can(p)&&!isAgg();} // 汇总视图为只读；薪资写入额外锁给 canRunPayroll (目前只有人事经理)
 function renderTop(){
@@ -1275,11 +1466,11 @@ function renderTop(){
 const MENU=[
   ["营运 Operations",[["dash","💰","dash"],["sales","🧾","sales"],["proc","🔄","proc"],["orderinv","🧾","orderinv"],["ck","🏭","ck"]]],
   ["库存 Inventory",[["inv","📦","inv"],["bom","🍲","bom"],["monthend","📋","monthend"],["opexm","💵","opexm"]]],
-  ["财务 Finance",[["ap","💳","ap"],["opex","💵","opex"],["monthly","📅","monthly"],["report","📈","report"]]],
+  ["财务 Finance",[["ap","💳","ap"],["opex","💵","opex"],["monthly","📅","monthly"],["report","📈","report"],["accounting","📒","accounting"]]],
   ["人事 HR",[["hr","👤","hr"],["attend","🕐","attend"],["schedule","📅","schedule"],["leave","🌴","leave"],["payroll","💴","payroll"],["payrun","🧮","payrun"]]],
   ["系统 System",[["settings","⚙️","settings"]]],
 ];
-const MENU_LABELS={sales:{zh:"销售 (POS)",en:"Sales (POS)"},orderinv:{zh:"订单发票",en:"Order Invoices"},ck:{zh:"中央厨房",en:"Central Kitchen"},stock:{zh:"盘点",en:"Stock Take"},hr:{zh:"员工档案",en:"Staff Profiles"},attend:{zh:"打卡考勤",en:"Attendance"},schedule:{zh:"排班",en:"Schedule"},leave:{zh:"请假",en:"Leave"},monthly:{zh:"月度核算",en:"Monthly Cost"},bom:{zh:"配方成本",en:"Recipe Cost"},opexm:{zh:"运营开销录入",en:"OpEx Entry"},monthend:{zh:"月末盘点",en:"Month-End Count"},payrun:{zh:"薪资发放 Payroll",en:"Payroll Run"}};
+const MENU_LABELS={sales:{zh:"销售 (POS)",en:"Sales (POS)"},orderinv:{zh:"订单发票",en:"Order Invoices"},ck:{zh:"中央厨房",en:"Central Kitchen"},stock:{zh:"盘点",en:"Stock Take"},hr:{zh:"员工档案",en:"Staff Profiles"},attend:{zh:"打卡考勤",en:"Attendance"},schedule:{zh:"排班",en:"Schedule"},leave:{zh:"请假",en:"Leave"},monthly:{zh:"月度核算",en:"Monthly Cost"},bom:{zh:"配方成本",en:"Recipe Cost"},opexm:{zh:"运营开销录入",en:"OpEx Entry"},monthend:{zh:"月末盘点",en:"Month-End Count"},payrun:{zh:"薪资发放 Payroll",en:"Payroll Run"},accounting:{zh:"会计总账",en:"Accounting"}};
 function mlabel(p){if(MENU_LABELS[p])return MENU_LABELS[p][LANG];return t(p);}
 function renderSidebar(){
   const html=MENU.map(([grp,items])=>{
@@ -1566,6 +1757,7 @@ async function apUnpay(sup){
   if(!apCanUnpay()){alert(LANG==="zh"?"已确认『已付款』后，只有区域副经理及以上才能改回。":"Only Area Manager & above can revert.");return;}
   if(!confirm(LANG==="zh"?("改回『未付款』？— "+sup):"Mark as UNPAID?"))return;
   const who=curUser?curUser.name:ROLES[curRole].name;apPaidMap()[sup]={paid:false,by:who,at:Date.now()};
+  delEntriesByRef('ap:'+sup);
   await save();try{if(typeof auditLog==='function')auditLog(LANG==="zh"?"应付状态":"AP",sup+" · 未付款 · "+who,"","");}catch(e){}render();
 }
 let _pmReceipt=null;
@@ -1612,7 +1804,10 @@ async function doPayConfirm(sup){
     }catch(e){}}
     if(uploaded)rec.receiptPath=uploaded; else rec.receipt=_pmReceipt; // 上传成功存路径，否则退回内嵌
   }
-  apPaidMap()[sup]=rec;_pmReceipt=null;_pmBlob=null;await save();closeM();
+  apPaidMap()[sup]=rec;_pmReceipt=null;_pmBlob=null;
+  const ref='ap:'+sup;delEntriesByRef(ref);
+  const amt=+(rec.amount||0);if(amt>0)postEntry(new Date().toLocaleDateString('en-CA'),(LANG==="zh"?"应付付款 ":"AP paid ")+sup,[{acc:'2000',dr:amt},{acc:(m==='cash'?'1000':'1010'),cr:amt}],ref);
+  await save();closeM();
   try{if(typeof auditLog==='function')auditLog(LANG==="zh"?"应付付款":"AP paid",sup+" · "+(m==='cash'?('现金 RM'+rec.amount):'转账/卡')+" · "+who,"","");}catch(e){}
   render();
 }
@@ -3989,13 +4184,16 @@ function formWaste2(editIdx){
     <button class="btn block brand" onclick="saveWaste2(${isEdit?editIdx:'null'})">${LANG==="zh"?"保存":"Save"}</button>`);
 }
 function wItemAuto(){const it=(d().items||[]).find(i=>i.name===document.getElementById('w_item').value);if(it){document.getElementById('w_cost').value=it.cost;}}
+function delEntriesByRef(ref){const l=ledger();for(let i=l.length-1;i>=0;i--){if(l[i].ref===ref)l.splice(i,1);}}
 async function saveWaste2(editIdx){const g=id=>document.getElementById(id);
   const rec={date:g('w_date').value||TODAY,item:g('w_item').value,code:g('w_code').value.trim(),cost:+g('w_cost').value||0,qty:+g('w_qty').value||0,reason:g('w_reason').value,note:g('w_note').value.trim()};
   if(!d().wasteLog)d().wasteLog=[];
-  if(editIdx!=null&&d().wasteLog[editIdx]){const old=d().wasteLog[editIdx];invReceive(old.item,old.qty,null);invReduce(rec.item,rec.qty);auditLog("编辑报废",rec.item+" ×"+rec.qty,money(old.cost*old.qty),money(rec.cost*rec.qty));d().wasteLog[editIdx]=rec;}
-  else{d().wasteLog.unshift(rec);invReduce(rec.item,rec.qty);auditLog("报废损耗",rec.item+" ×"+rec.qty,"",money(rec.cost*rec.qty));}
+  if(editIdx!=null&&d().wasteLog[editIdx]){const old=d().wasteLog[editIdx];rec.id=old.id||(Date.now()+Math.random());invReceive(old.item,old.qty,null);invReduce(rec.item,rec.qty);auditLog("编辑报废",rec.item+" ×"+rec.qty,money(old.cost*old.qty),money(rec.cost*rec.qty));d().wasteLog[editIdx]=rec;}
+  else{rec.id=Date.now()+Math.random();d().wasteLog.unshift(rec);invReduce(rec.item,rec.qty);auditLog("报废损耗",rec.item+" ×"+rec.qty,"",money(rec.cost*rec.qty));}
+  const ref='waste:'+rec.id;delEntriesByRef(ref);
+  const amt=+(rec.cost*rec.qty).toFixed(2);if(amt>0)postEntry(rec.date,(LANG==="zh"?"报废损耗 ":"Waste ")+rec.item,[{acc:'5090',dr:amt},{acc:'1030',cr:amt}],ref);
   await save();closeM();render();}
-async function delWaste2(gi){if(!confirm(LANG==="zh"?"删除此报废？":"Delete?"))return;const old=d().wasteLog[gi]||{};invReceive(old.item,old.qty,null);d().wasteLog.splice(gi,1);auditLog("删除报废",(old.item||'')+" ×"+(old.qty||''),money((old.cost||0)*(old.qty||0)),"");await save();render();}
+async function delWaste2(gi){if(!confirm(LANG==="zh"?"删除此报废？":"Delete?"))return;const old=d().wasteLog[gi]||{};invReceive(old.item,old.qty,null);d().wasteLog.splice(gi,1);if(old.id)delEntriesByRef('waste:'+old.id);auditLog("删除报废",(old.item||'')+" ×"+(old.qty||''),money((old.cost||0)*(old.qty||0)),"");await save();render();}
 
 /* ================= 招待 / 赠送（独立）================= */
 function pgOffer(){
@@ -4026,10 +4224,12 @@ function formOffer(editIdx){
 async function saveOffer(editIdx){const g=id=>document.getElementById(id);
   const rec={date:g('o_date').value||TODAY,type:g('o_type').value,item:g('o_item').value.trim(),person:g('o_person').value.trim(),qty:+g('o_qty').value||0,total:+g('o_total').value||0,note:g('o_note').value.trim()};
   if(!d().offers)d().offers=[];
-  if(editIdx!=null&&d().offers[editIdx]){const old=d().offers[editIdx];auditLog("编辑招待",rec.type+" "+rec.item,money(old.total),money(rec.total));d().offers[editIdx]=rec;}
-  else{d().offers.unshift(rec);auditLog("招待赠送",rec.type+" "+rec.item,"",money(rec.total));}
+  if(editIdx!=null&&d().offers[editIdx]){const old=d().offers[editIdx];rec.id=old.id||(Date.now()+Math.random());auditLog("编辑招待",rec.type+" "+rec.item,money(old.total),money(rec.total));d().offers[editIdx]=rec;}
+  else{rec.id=Date.now()+Math.random();d().offers.unshift(rec);auditLog("招待赠送",rec.type+" "+rec.item,"",money(rec.total));}
+  const ref='offer:'+rec.id;delEntriesByRef(ref);
+  if(rec.total>0)postEntry(rec.date,(LANG==="zh"?"招待赠送 ":"Offer ")+rec.item,[{acc:'5091',dr:rec.total},{acc:'1030',cr:rec.total}],ref);
   await save();closeM();render();}
-async function delOffer(gi){if(!confirm(LANG==="zh"?"删除此招待？":"Delete?"))return;const old=d().offers[gi]||{};d().offers.splice(gi,1);auditLog("删除招待",(old.type||'')+" "+(old.item||''),money(old.total),"");await save();render();}
+async function delOffer(gi){if(!confirm(LANG==="zh"?"删除此招待？":"Delete?"))return;const old=d().offers[gi]||{};d().offers.splice(gi,1);if(old.id)delEntriesByRef('offer:'+old.id);auditLog("删除招待",(old.type||'')+" "+(old.item||''),money(old.total),"");await save();render();}
 
 /* ================= 运营开销记录（逐笔：营销/维修/日常杂费，按月）================= */
 function opexLogCats(){return [
@@ -4065,17 +4265,20 @@ function formOpexLog(editIdx){
     <div class="fr"><label>${LANG==="zh"?"备注":"Note"}</label><input id="ol_note" value="${r?oEsc(r.note||''):''}"></div>
     <button class="btn block brand" onclick="saveOpexLog(${isEdit?editIdx:'null'})">${LANG==="zh"?"保存":"Save"}</button>`);
 }
+const OPEXLOG_ACCT={marketing:'6120',maintenance:'6130',wifi:'6140',rubbish:'6150',possaas:'6160',accounting:'6170',repair:'6130'};
 async function saveOpexLog(editIdx){const g=id=>document.getElementById(id);
   const rec={date:g('ol_date').value||TODAY,cat:g('ol_cat').value,invoiceNo:g('ol_inv').value.trim(),amount:+g('ol_amt').value||0,note:g('ol_note').value.trim()};
   if(!d().opexLog)d().opexLog=[];
   let oldMonth=null;
-  if(editIdx!=null&&d().opexLog[editIdx]){const old=d().opexLog[editIdx];oldMonth=(old.date||'').slice(0,7);auditLog("编辑运营开销记录",opexLogCatLabel(rec.cat)+" "+(rec.invoiceNo||''),money(old.amount),money(rec.amount));d().opexLog[editIdx]=rec;}
-  else{d().opexLog.unshift(rec);auditLog("运营开销记录",opexLogCatLabel(rec.cat)+" "+(rec.invoiceNo||''),"",money(rec.amount));}
+  if(editIdx!=null&&d().opexLog[editIdx]){const old=d().opexLog[editIdx];rec.id=old.id||(Date.now()+Math.random());oldMonth=(old.date||'').slice(0,7);auditLog("编辑运营开销记录",opexLogCatLabel(rec.cat)+" "+(rec.invoiceNo||''),money(old.amount),money(rec.amount));d().opexLog[editIdx]=rec;}
+  else{rec.id=Date.now()+Math.random();d().opexLog.unshift(rec);auditLog("运营开销记录",opexLogCatLabel(rec.cat)+" "+(rec.invoiceNo||''),"",money(rec.amount));}
   const newMonth=(rec.date||'').slice(0,7);
   applyOpexLogSync(newMonth);
   if(oldMonth&&oldMonth!==newMonth)applyOpexLogSync(oldMonth);
+  const ref='opexlog:'+rec.id;delEntriesByRef(ref);
+  const acc=OPEXLOG_ACCT[rec.cat];if(acc&&rec.amount>0)postEntry(rec.date,opexLogCatLabel(rec.cat)+(rec.invoiceNo?' '+rec.invoiceNo:''),[{acc,dr:rec.amount},{acc:'2030',cr:rec.amount}],ref);
   await save();closeM();render();}
-async function delOpexLog(gi){if(!confirm(LANG==="zh"?"删除此记录？":"Delete?"))return;const old=d().opexLog[gi]||{};d().opexLog.splice(gi,1);auditLog("删除运营开销记录",opexLogCatLabel(old.cat)+" "+(old.invoiceNo||''),money(old.amount),"");applyOpexLogSync((old.date||'').slice(0,7));await save();render();}
+async function delOpexLog(gi){if(!confirm(LANG==="zh"?"删除此记录？":"Delete?"))return;const old=d().opexLog[gi]||{};d().opexLog.splice(gi,1);if(old.id)delEntriesByRef('opexlog:'+old.id);auditLog("删除运营开销记录",opexLogCatLabel(old.cat)+" "+(old.invoiceNo||''),money(old.amount),"");applyOpexLogSync((old.date||'').slice(0,7));await save();render();}
 
 /* 路由封装：三个供应商账册 */
 function pgPurchase(){return pgLedger('purchase');}
@@ -4239,8 +4442,24 @@ async function setPayOv(id,f,v){const r=payrunData();if(r.finalized)return;r.ov[
 async function setPayPcb(id,v){const r=payrunData();if(r.finalized)return;r.ov[id]=r.ov[id]||{};if(String(v).trim()==='')delete r.ov[id].pcb;else r.ov[id].pcb=+v||0;await save();render();}
 async function setEmpAttr(id,f,v){if(payrunData().finalized)return;const e=(d().staff||[]).find(x=>x.id===id);if(e){e[f]=v;await save();render();}}
 async function setSl24jPhase(v){if(payrunData().finalized)return;payCfg().sl24j=v;await save();render();}
-async function finalizePayrun(){const r=payrunData();if(!confirm(LANG==="zh"?("确认「"+monthLabel2(payrunMonth)+"」薪资已核对无误？确认后锁定，可下载/打印。"):"Finalize payroll?"))return;r.finalized=true;auditLog("薪资核对完成",monthLabel2(payrunMonth),"","");await save();render();}
-async function unlockPayrun(){const r=payrunData();if(!confirm(LANG==="zh"?"解锁本月薪资以便修改？":"Unlock?"))return;r.finalized=false;await save();render();}
+function postPayrollLedger(month){
+  const staff=(d().staff||[]);const ref='payroll:'+month;delEntriesByRef(ref);
+  const t={basic:0,allowance:0,incentive:0,ph:0,ot:0,epfEr:0,socEr:0,eisEr:0,levy:0,epfEe:0,socEe:0,eisEe:0,pcb:0,sl:0,net:0};
+  staff.forEach(e=>{const c=computeRow(e,month);t.basic+=c.basic;t.allowance+=c.allowance;t.incentive+=c.incentive;t.ph+=c.ph;t.ot+=c.otAmt;
+    t.epfEr+=c.epf.er;t.socEr+=c.soc.er;t.eisEr+=c.eis.er;t.levy+=c.levy;t.epfEe+=c.epf.ee;t.socEe+=c.soc.ee;t.eisEe+=c.eis.ee;t.pcb+=c.pcb;t.sl+=c.sl;t.net+=c.net;});
+  const gross=t.basic+t.allowance+t.incentive+t.ph+t.ot;const empDed=t.epfEe+t.socEe+t.eisEe+t.pcb+t.sl;
+  const date=month+'-28';const lines=[];
+  const add=(acc,dr,cr)=>{if((dr||cr)>0.005)lines.push({acc,dr:dr||0,cr:cr||0});};
+  add('6000',t.basic+t.allowance,0);add('6010',t.ot,0);add('6011',t.ph,0);add('6012',t.incentive,0);
+  add('6020',t.epfEr,0);add('6021',t.socEr,0);add('6022',t.eisEr,0);add('6023',t.levy,0);
+  add('2010',0,gross); // 应付薪金(总发放前，含员工代扣部分)
+  add('2011',0,t.epfEr);add('2013',0,t.socEr);add('2014',0,t.eisEr);add('2020',0,t.levy);
+  // 从应付薪金里扣出代扣项目，转去各自的应付科目
+  add('2010',empDed,0);add('2012',0,t.epfEe);add('2013',0,t.socEe);add('2014',0,t.eisEe);add('2015',0,t.pcb);add('2016',0,t.sl);
+  postEntry(date,(LANG==="zh"?"薪资核定 ":"Payroll ")+monthLabel2(month),lines,ref);
+}
+async function finalizePayrun(){const r=payrunData();if(!confirm(LANG==="zh"?("确认「"+monthLabel2(payrunMonth)+"」薪资已核对无误？确认后锁定，可下载/打印。"):"Finalize payroll?"))return;r.finalized=true;postPayrollLedger(payrunMonth);auditLog("薪资核对完成",monthLabel2(payrunMonth),"","");await save();render();}
+async function unlockPayrun(){const r=payrunData();if(!confirm(LANG==="zh"?"解锁本月薪资以便修改？":"Unlock?"))return;r.finalized=false;delEntriesByRef('payroll:'+payrunMonth);await save();render();}
 let _paySaveT=null;
 function payDebouncedSave(){if(_paySaveT)clearTimeout(_paySaveT);_paySaveT=setTimeout(()=>{_paySaveT=null;save();},500);}
 function _setTxt(id,v){const el=document.getElementById(id);if(el)el.textContent=v;}
@@ -4499,7 +4718,7 @@ function pgPayrun(){
 
 /* 页面路由补充（ap/opex 不在底部tab，用函数导航） */
 const _pages={dash:pgDash,sales:pgSales,inv:pgInv,proc:pgProc,bom:pgBom,report:pgReport,settings:pgSettings,ap:pgAp,opex:pgOpex,opexm:pgOpexM,payroll:pgPayroll,payrun:pgPayrun,hr:pgHR,attend:pgAttend,schedule:pgSchedule,leave:pgLeave,ck:pgCK,stock:pgStock,
-  purchase:pgPurchase,grn:pgGRN,transfer:pgTransfer,waste2:pgWaste2,offer:pgOffer,opexlog:pgOpexLog,monthend:pgMonthEnd,monthly:pgMonthly,ordersheet:pgOrderSheet,orderinv:pgOrderInv};
+  purchase:pgPurchase,grn:pgGRN,transfer:pgTransfer,waste2:pgWaste2,offer:pgOffer,opexlog:pgOpexLog,monthend:pgMonthEnd,monthly:pgMonthly,ordersheet:pgOrderSheet,orderinv:pgOrderInv,accounting:pgAccounting};
 /* ================= 通用「拖动排序」☰（触屏+鼠标，无需库）=================
    用法：容器加 data-sort="<类型>" (+ data-* 上下文)，子行加 data-sortid 与一个 .draghandle。
    放手后调用 SORT_HANDLERS[类型](container, 新顺序ids)。 */
