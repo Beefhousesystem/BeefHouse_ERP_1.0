@@ -644,7 +644,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0930d";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0930e";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -1439,6 +1439,120 @@ function apAgingHTML(){const zh=LANG==="zh";
   <tbody>${rows||`<tr><td colspan="${buckets.length+3}" class="empty">${zh?'暂无未清应付账款':'No outstanding payables'}</td></tr>`}</tbody>
   <tfoot><tr style="background:#FAFBFC;font-weight:800;"><td colspan="2">${zh?'合计':'Total'}</td>${totals.map(t=>`<td class="c">${money(t)}</td>`).join('')}<td class="c">${money(grand)}</td></tr></tfoot></table></div>`;
 }
+/* ================= 销售收款自动过账(比照 SQL Account 的 Cash Sale / Official Receipt) =================
+   d().sales 是"当前快照"(POS覆盖式)，不是按日期存的历史流水，所以采用"业主自己按营业日按一次『结账』"
+   的模式：先把每道菜归到 自助餐/单点/饮料 三类收入科目(第一次用会用「单点」当预设类别，可自行改)，
+   按下结账就用当天日期记一笔 OR(收款凭证)——同一天重复结账会先冲销旧的再记新的，不会重复入账。 */
+function salesAcctCat(rid){return (d().salesAcctCat||{})[rid]||'alacarte';}
+function setSalesAcctCat(rid,cat){if(!d().salesAcctCat)d().salesAcctCat={};d().salesAcctCat[rid]=cat;save();render();}
+const SALES_CAT_ACC={buffet:'6-1000',alacarte:'6-2000',beverage:'6-3000'};
+const SALES_CAT_LABEL={buffet:{zh:'自助餐',en:'Buffet'},alacarte:{zh:'单点',en:'A La Carte'},beverage:{zh:'饮料',en:'Beverage'}};
+function postDailySales(){const zh=LANG==="zh";const date=(document.getElementById('sc_date')||{}).value||TODAY;
+  const sales=(d().sales||[]);const byCat={buffet:0,alacarte:0,beverage:0};
+  sales.forEach(s=>{const r=(d().recipes||[]).find(x=>x.id===s.recipeId);if(!r)return;const rev=(+r.price||0)*(+s.qty||0);const cat=salesAcctCat(r.id);byCat[cat]=(byCat[cat]||0)+rev;});
+  const total=Object.values(byCat).reduce((a,b)=>a+b,0);
+  if(total<=0.005){alert(zh?'目前销售总额为0，没有东西可以过账':'Sales total is 0, nothing to post');return;}
+  const ref='sales:'+date;delEntriesByRef(ref);
+  const lines=[{acc:'2-1000',dr:+total.toFixed(2)}];
+  Object.keys(byCat).forEach(c=>{if(byCat[c]>0.005)lines.push({acc:SALES_CAT_ACC[c],cr:+byCat[c].toFixed(2)});});
+  postEntry(date,(zh?'每日销售 ':'Daily Sales ')+date,lines,ref,nextDocNo('OR'));
+  auditLog(zh?"每日销售过账":"Daily sales posted",date,"",money(total));
+  save();render();
+}
+function salesCloseHTML(){const zh=LANG==="zh";const sales=(d().sales||[]).filter(s=>+s.qty>0);
+  const rows=sales.map(s=>{const r=(d().recipes||[]).find(x=>x.id===s.recipeId);if(!r)return '';const rev=(+r.price||0)*(+s.qty||0);const cat=salesAcctCat(r.id);
+    return `<tr><td>${oEsc(r.name)}</td><td class="c">${num(s.qty)}</td><td class="c">${money(rev)}</td><td><select onchange="setSalesAcctCat(${r.id},this.value)">${Object.keys(SALES_CAT_LABEL).map(c=>`<option value="${c}" ${cat===c?'selected':''}>${SALES_CAT_LABEL[c][zh?'zh':'en']}</option>`).join('')}</select></td></tr>`;}).join('');
+  const byCat={buffet:0,alacarte:0,beverage:0};sales.forEach(s=>{const r=(d().recipes||[]).find(x=>x.id===s.recipeId);if(!r)return;byCat[salesAcctCat(r.id)]+=(+r.price||0)*(+s.qty||0);});
+  const total=Object.values(byCat).reduce((a,b)=>a+b,0);
+  const posted=ledger().filter(e=>e.ref&&e.ref.startsWith('sales:')).map(e=>e.ref.slice(6)).sort().reverse();
+  return `<div class="hint">${zh?'把当前系统里的销售数据(d().sales，来自"销售(POS)"页面)按类别过账成一笔收款分录。同一天可以重复结账(会先冲销旧的再记新的)，适合每天营业结束后按一次。品项类别第一次预设「单点」，可自行改成自助餐/饮料。':'Post today\'s sales snapshot as one OR entry by category. Re-closing the same date replaces the old entry.'}</div>
+  <div class="fg2" style="margin-bottom:10px;"><div class="fr"><label>${zh?'结账日期':'Closing Date'}</label><input id="sc_date" type="date" value="${TODAY}"></div><div class="fr"><label>${zh?'今日销售总额':'Today\'s Total'}</label><input value="${money(total)}" disabled></div></div>
+  <div class="card tbl" style="margin-bottom:10px;"><table><thead><tr><th>${zh?'菜品':'Item'}</th><th class="c">${zh?'数量':'Qty'}</th><th class="c">${zh?'金额':'Amount'}</th><th>${zh?'收入类别':'Revenue Category'}</th></tr></thead><tbody>${rows||`<tr><td colspan="4" class="empty">${zh?'目前没有销售数据(先去"销售(POS)"页面输入)':'No sales data yet'}</td></tr>`}</tbody></table></div>
+  <button class="btn block brand" onclick="postDailySales()">💰 ${zh?'结账过账(生成OR)':'Close & Post (generates OR)'}</button>
+  ${posted.length?`<div class="hint" style="margin-top:10px;">${zh?'已过账的日期：':'Already posted dates: '}${posted.slice(0,10).join('、')}</div>`:''}`;
+}
+/* ================= 应收账款/Trade Debtors 小模块(现金生意用得少，但补齐给有宴会/包场订金的情况用) ================= */
+function debtors(){if(!d().debtors)d().debtors=[];return d().debtors;}
+function formDebtor(editIdx){const zh=LANG==="zh";const r=(editIdx!=null)?debtors()[editIdx]:null;
+  openForm(`<h3>🧾 ${r?(zh?'编辑应收发票':'Edit Invoice'):(zh?'新增应收发票 Sales Invoice':'New Sales Invoice')} <span class="x" onclick="closeM()">×</span></h3>
+    <div class="fg2"><div class="fr"><label>${zh?'客户':'Customer'}</label><input id="db_cust" value="${r?oEsc(r.customer):''}"></div><div class="fr"><label>${zh?'日期':'Date'}</label><input id="db_date" type="date" value="${r?r.date:TODAY}"></div></div>
+    <div class="fg2"><div class="fr"><label>${zh?'金额 RM':'Amount'}</label><input id="db_amt" type="number" step="0.01" value="${r?r.amount:''}"></div><div class="fr"><label>${zh?'收入类别':'Revenue Category'}</label><select id="db_acc"><option value="6-4000" ${r&&r.acc==='6-4000'?'selected':''}>${zh?'宴会/包场':'Event/Banquet'}</option><option value="6-9000" ${r&&r.acc==='6-9000'?'selected':''}>${zh?'其他':'Other'}</option></select></div></div>
+    <div class="fr"><label>${zh?'备注':'Note'}</label><input id="db_note" value="${r?oEsc(r.note||''):''}"></div>
+    <button class="btn block brand" onclick="saveDebtor(${editIdx!=null?editIdx:'null'})">${zh?'保存(自动记账借应收/贷收入)':'Save (posts Dr Debtors / Cr Revenue)'}</button>`);
+}
+function saveDebtor(editIdx){const g=id=>document.getElementById(id);const zh=LANG==="zh";
+  const rec={customer:g('db_cust').value.trim(),date:g('db_date').value||TODAY,amount:+g('db_amt').value||0,acc:g('db_acc').value,note:g('db_note').value.trim(),paid:0};
+  if(!rec.customer||!rec.amount){alert(zh?'请填客户与金额':'Fill customer & amount');return;}
+  const list=debtors();
+  if(editIdx!=null&&list[editIdx]){rec.id=list[editIdx].id;rec.paid=list[editIdx].paid||0;list[editIdx]=rec;auditLog("编辑应收发票",rec.customer,"",money(rec.amount));}
+  else{rec.id=Date.now()+Math.random();list.unshift(rec);auditLog("新增应收发票",rec.customer,"",money(rec.amount));}
+  const ref='debtor-inv:'+rec.id;delEntriesByRef(ref);
+  postEntry(rec.date,(zh?'销售发票 ':'Sales Invoice ')+rec.customer,[{acc:'2-2000',dr:rec.amount},{acc:rec.acc,cr:rec.amount}],ref,nextDocNo('JV'));
+  save();closeM();render();
+}
+function delDebtor(gi){if(!confirm(LANG==="zh"?"删除此应收发票？":"Delete?"))return;const old=debtors()[gi];debtors().splice(gi,1);if(old){delEntriesByRef('debtor-inv:'+old.id);delEntriesByRef('debtor-pay:'+old.id);}auditLog("删除应收发票",old?old.customer:'',"","");save();render();}
+function collectDebtor(gi){const zh=LANG==="zh";const rec=debtors()[gi];if(!rec)return;
+  const remain=+(rec.amount-(rec.paid||0)).toFixed(2);if(remain<=0){alert(zh?'已全部收清':'Already fully collected');return;}
+  const amt=+(prompt((zh?'收款金额(剩余 ':'Collect amount (remaining ')+money(remain)+(zh?')：':'):'),remain)||0);
+  if(!amt||amt<=0)return;
+  rec.paid=+((rec.paid||0)+amt).toFixed(2);
+  postEntry(new Date().toLocaleDateString('en-CA'),(zh?'收款 ':'Collection ')+rec.customer,[{acc:'2-1000',dr:amt},{acc:'2-2000',cr:amt}],'debtor-pay:'+rec.id+':'+Date.now(),nextDocNo('OR'));
+  auditLog("应收收款",rec.customer,"",money(amt));
+  save();render();
+}
+function arHTML(){const zh=LANG==="zh";const w=['owner','hrmanager','area'].includes(curRole);const list=debtors();
+  const rows=list.map((r,i)=>{const remain=+(r.amount-(r.paid||0)).toFixed(2);
+    return `<tr><td>${oEsc(r.customer)}</td><td class="mini">${r.date}</td><td class="c">${money(r.amount)}</td><td class="c">${money(r.paid||0)}</td><td class="c" style="font-weight:700;color:${remain>0.005?'var(--red)':'var(--green)'};">${money(remain)}</td><td class="mini">${oEsc(r.note||'')}</td><td style="white-space:nowrap;">${remain>0.005?`<button class="btn ghost sm" onclick="collectDebtor(${i})">💰${zh?'收款':'Collect'}</button>`:''} <button class="ib" onclick="formDebtor(${i})">✏️</button> <button class="ib" onclick="delDebtor(${i})">🗑️</button></td></tr>`;}).join('');
+  return `<div class="hint">${zh?'应收账款(Trade Debtors)：牛室是现金生意用得少，主要给宴会/包场订金这类有挂账的客户用。新增发票自动记账(借应收/贷收入)，收款自动记账(借现金/贷应收)。':'Trade Debtors module for credit customers (e.g. event deposits).'}</div>
+  <button class="btn brand sm" style="margin-bottom:8px;" onclick="formDebtor()">+ ${zh?'新增应收发票':'New Sales Invoice'}</button>
+  <div class="card tbl"><table><thead><tr><th>${zh?'客户':'Customer'}</th><th>${zh?'日期':'Date'}</th><th class="c">${zh?'金额':'Amount'}</th><th class="c">${zh?'已收':'Collected'}</th><th class="c">${zh?'未收':'Outstanding'}</th><th>${zh?'备注':'Note'}</th><th></th></tr></thead><tbody>${rows||`<tr><td colspan="7" class="empty">${zh?'暂无应收发票':'No invoices'}</td></tr>`}</tbody></table></div>`;
+}
+function arAgingHTML(){const zh=LANG==="zh";const buckets=agingBuckets();const totals=buckets.map(()=>0);
+  const rows=debtors().map(r=>{const remain=+(r.amount-(r.paid||0)).toFixed(2);if(remain<=0.005)return '';
+    const days=Math.floor((Date.now()-new Date(r.date).getTime())/86400000);
+    const bi=buckets.findIndex(b=>days>=b[0]&&days<=b[1]);const idx=bi<0?buckets.length-1:bi;totals[idx]+=remain;
+    const cells=buckets.map((b,i)=>`<td class="c">${i===idx?money(remain):''}</td>`).join('');
+    return `<tr><td>${oEsc(r.customer)}</td><td class="c">${days}${zh?'天':'d'}</td>${cells}<td class="c" style="font-weight:700;">${money(remain)}</td></tr>`;}).join('');
+  const grand=totals.reduce((a,b)=>a+b,0);
+  return `<div class="hint">${zh?'应收账龄分析(AR Aging)，跟应付账龄同一套逻辑。':'AR Aging, same logic as AP Aging.'}</div>
+  <div class="card tbl"><table><thead><tr><th>${zh?'客户':'Customer'}</th><th class="c">${zh?'账龄':'Age'}</th>${buckets.map(b=>`<th class="c">${agingLabel(b,zh)}</th>`).join('')}<th class="c">${zh?'合计':'Total'}</th></tr></thead>
+  <tbody>${rows||`<tr><td colspan="${buckets.length+3}" class="empty">${zh?'暂无未收应收账款':'No outstanding receivables'}</td></tr>`}</tbody>
+  <tfoot><tr style="background:#FAFBFC;font-weight:800;"><td colspan="2">${zh?'合计':'Total'}</td>${totals.map(t=>`<td class="c">${money(t)}</td>`).join('')}<td class="c">${money(grand)}</td></tr></tfoot></table></div>`;
+}
+/* ================= 银行对账 Bank Reconciliation(比照 SQL Account 的对账单流程) ================= */
+function bankRecMonth(){const m=acctDefaultRange().to.slice(0,7);if(!d().bankRecs)d().bankRecs={};if(!d().bankRecs[m])d().bankRecs[m]={stmtBalance:0,items:[]};return {m,r:d().bankRecs[m]};}
+function setBankStmtBalance(v){const {r}=bankRecMonth();r.stmtBalance=+v||0;save();}
+function addBankRecItem(){const {r}=bankRecMonth();r.items.push({desc:'',amount:0,type:'add'});save();render();}
+function setBankRecItem(i,f,v){const {r}=bankRecMonth();if(!r.items[i])return;r.items[i][f]=(f==='amount')?(+v||0):v;save();if(f!=='desc')render();}
+function delBankRecItem(i){const {r}=bankRecMonth();r.items.splice(i,1);save();render();}
+function bankRecHTML(){const zh=LANG==="zh";const {to}=acctDefaultRange();const {m,r}=bankRecMonth();
+  const glBalance=acctNormalBalance('2-1010',null,to); // 总账上的银行余额(截至选定日期)
+  const adj=r.items.reduce((s,it)=>s+(it.type==='add'?(+it.amount||0):-(+it.amount||0)),0);
+  const adjustedGl=glBalance+adj;const diff=+(adjustedGl-r.stmtBalance).toFixed(2);
+  return `<div class="hint">${zh?'银行对账：总账上的银行余额，跟银行月结单余额之间的差异，通常是「未过账支票(未兑现)」「在途存款」这类时间差造成的——逐条列出来调整，两边应该要对得上。':'Reconcile GL bank balance against the bank statement.'}</div>
+  <div class="fg2" style="margin-bottom:10px;"><div class="fr"><label>${zh?'对账月份':'Month'}</label><input value="${m}" disabled></div><div class="fr"><label>${zh?'银行月结单余额':'Bank Statement Balance'}</label><input type="number" step="0.01" value="${r.stmtBalance}" onchange="setBankStmtBalance(this.value)"></div></div>
+  <div class="card tbl" style="margin-bottom:10px;"><table><thead><tr><th>${zh?'总账银行余额(2-1010)':'GL Bank Balance'}</th><th class="c">${money(glBalance)}</th></tr></thead><tbody>
+  ${r.items.map((it,i)=>`<tr><td><input value="${oEsc(it.desc)}" placeholder="${zh?'例如：未兑现支票#123':'e.g. Uncleared cheque #123'}" onchange="setBankRecItem(${i},'desc',this.value)" style="width:60%;"> <select onchange="setBankRecItem(${i},'type',this.value)"><option value="add" ${it.type==='add'?'selected':''}>${zh?'加':'Add'}</option><option value="less" ${it.type==='less'?'selected':''}>${zh?'减':'Less'}</option></select></td><td class="c"><input type="number" step="0.01" value="${it.amount}" style="width:90px;text-align:right;" onchange="setBankRecItem(${i},'amount',this.value)"> <button class="ib" onclick="delBankRecItem(${i})">🗑️</button></td></tr>`).join('')}
+  </tbody><tfoot><tr style="font-weight:800;"><td>${zh?'调整后余额':'Adjusted Balance'}</td><td class="c">${money(adjustedGl)}</td></tr></tfoot></table></div>
+  <button class="btn ghost sm" style="margin-bottom:8px;" onclick="addBankRecItem()">+ ${zh?'新增调整项':'Add Item'}</button>
+  <div class="al ${Math.abs(diff)<0.01?'':'al-r'}">${Math.abs(diff)<0.01?('✅ '+(zh?'对账一致':'Reconciled')):('⚠️ '+(zh?`相差 RM${num(Math.abs(diff),2)}，请检查是否漏记交易或调整项`:`Off by RM${num(Math.abs(diff),2)}`))}</div>`;
+}
+/* ================= SST 申报参考报表(科目 3-3000，正式申报仍以 MySST 官网为准) ================= */
+function sstReportHTML(){const zh=LANG==="zh";const {from,to}=acctDefaultRange();
+  const {dr,cr}=acctPeriod('3-3000',from,to); // dr=已缴清/冲销部分，cr=本期新增应缴SST
+  const net=cr-dr;
+  return `<div class="hint">${zh?`SST 参考报表：${from} 至 ${to} 期间「应付SST(3-3000)」科目的变动——本期新增应缴 = 贷方合计，已缴/冲销 = 借方合计。仅供整理参考，正式申报以 MySST 官网 SST-02 表格为准。`:`SST reference: movements on the SST Payable account for the period. Reference only — file via MySST.`}</div>
+  <div class="card tbl"><table><tbody>
+    <tr><td>${zh?'本期新增应缴SST':'SST Charged This Period'}</td><td class="c">${money(cr)}</td></tr>
+    <tr><td>${zh?'本期已缴/冲销SST':'SST Paid/Adjusted This Period'}</td><td class="c">${money(dr)}</td></tr>
+    <tr style="font-weight:800;border-top:2px solid #333;"><td>${zh?'期末应缴SST净额':'Net SST Payable'}</td><td class="c">${money(net)}</td></tr>
+  </tbody></table></div>
+  <button class="btn ghost sm" style="margin-top:8px;" onclick="exportSSTCSV()">📋 ${zh?'导出CSV':'Export CSV'}</button>`;
+}
+function exportSSTCSV(){const zh=LANG==="zh";const {from,to}=acctDefaultRange();const {dr,cr}=acctPeriod('3-3000',from,to);
+  downloadCSV('SST_'+from+'_to_'+to+'.csv',[[zh?'期间':'Period',from+' - '+to],[zh?'本期新增应缴SST':'SST Charged',cr.toFixed(2)],[zh?'本期已缴/冲销':'SST Paid',dr.toFixed(2)],[zh?'期末应缴净额':'Net Payable',(cr-dr).toFixed(2)]]);
+  auditLog("导出SST报表",from+' - '+to,"","");
+}
 function glHTML(){const zh=LANG==="zh";const {from,to}=acctDefaultRange();const w=['owner','hrmanager'].includes(curRole);
   const entries=ledger().filter(e=>e.date>=from&&e.date<=to).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.ts-a.ts);
   const rows=entries.map(e=>{
@@ -1470,13 +1584,17 @@ function saveManualJE(){const zh=LANG==="zh";const date=document.getElementById(
 }
 function pgAccounting(){const zh=LANG==="zh";
   if(isAgg())return `<div class="fb"><h2 class="h" style="margin:0;">📒 ${zh?'会计总账':'Accounting'}</h2></div><div class="hint">${zh?'请在右上角切换到某一分店查看该店的账本。':'Switch to a branch.'}</div>`;
-  const tabs=[['tb',zh?'试算表':'Trial Balance'],['pl',zh?'损益表':'P&L'],['bs',zh?'资产负债表':'Balance Sheet'],['cf',zh?'现金流量表':'Cash Flow'],['fa',zh?'固定资产':'Fixed Assets'],['aging',zh?'应付账龄':'AP Aging'],['gl',zh?'总账流水':'Ledger']];
-  const needsRange=['tb','pl','bs','cf','gl'].includes(acctTab);
+  const tabs=[['tb',zh?'试算表':'Trial Balance'],['pl',zh?'损益表':'P&L'],['bs',zh?'资产负债表':'Balance Sheet'],['cf',zh?'现金流量表':'Cash Flow'],
+    ['salesclose',zh?'销售结账':'Sales Closing'],['ar',zh?'应收账款':'AR'],['araging',zh?'应收账龄':'AR Aging'],['aging',zh?'应付账龄':'AP Aging'],
+    ['bankrec',zh?'银行对账':'Bank Rec'],['fa',zh?'固定资产':'Fixed Assets'],['sst',zh?'SST报表':'SST'],['gl',zh?'总账流水':'Ledger']];
+  const needsRange=['tb','pl','bs','cf','gl','sst'].includes(acctTab);
+  const pages={tb:trialBalanceHTML,pl:plHTML,bs:bsHTML,cf:cfHTML,salesclose:salesCloseHTML,ar:arHTML,araging:arAgingHTML,aging:apAgingHTML,bankrec:bankRecHTML,fa:faHTML,sst:sstReportHTML,gl:glHTML};
+  const fn=pages[acctTab]||trialBalanceHTML;
   return `<div class="fb"><h2 class="h" style="margin:0;">📒 ${zh?'会计总账':'Accounting'} <span class="tag">v${BUILD}</span></h2></div>
-  <div class="al al-a" style="margin-bottom:10px;">⚠️ ${zh?'这是独立于原本营运成本追踪的复式记账层。报废损耗/招待赠送/运营开销记录/应付账款付款/薪资发放核定/固定资产购置&折旧会自动过账；销售收入与进货入库还没接上自动过账，需要用「总账流水→手动记账分录」自行补上。正式拿给会计师/审计使用前，请务必请专业人士核对科目与金额是否正确。':'Auto-posts most transactions except sales & purchases (use manual entries). Have a professional verify before using for audit/filing.'}</div>
+  <div class="al al-a" style="margin-bottom:10px;">⚠️ ${zh?'这是独立于原本营运成本追踪的复式记账层，格式/单据编号比照 SQL Account 设计，方便财务人员/会计师适应。正式拿给会计师/审计使用前，请务必请专业人士核对科目与金额是否正确。':'This double-entry layer mirrors SQL Account\'s format/document numbering. Have a professional verify before using for audit/filing.'}</div>
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">${tabs.map(([k,l])=>`<button class="btn sm ${acctTab===k?'brand':'ghost'}" onclick="setAcctTab('${k}')">${l}</button>`).join('')}</div>
   ${needsRange?acctRangeBar():''}
-  ${acctTab==='tb'?trialBalanceHTML():acctTab==='pl'?plHTML():acctTab==='bs'?bsHTML():acctTab==='cf'?cfHTML():acctTab==='fa'?faHTML():acctTab==='aging'?apAgingHTML():glHTML()}`;
+  ${fn()}`;
 }
 // 一份销量对应的「食材消耗表」（展开多级 BOM）
 function salesConsumption(salesArr){
@@ -4042,6 +4160,14 @@ let _gridSaveT=null,_gridSaveCtx=null;
 function gridSave(mod,sup){_gridSaveCtx={mod,sup};if(_gridSaveT)clearTimeout(_gridSaveT);_gridSaveT=setTimeout(()=>{_gridSaveT=null;save();const sm=document.getElementById('gridSummary');if(sm&&_gridSaveCtx)sm.innerHTML=gridSummaryHTML(_gridSaveCtx.mod,_gridSaveCtx.sup,gridCurMonth||ledgerMonth);},400);}
 function gridSaveFlush(){if(_gridSaveT){clearTimeout(_gridSaveT);_gridSaveT=null;save();}}
 if(typeof window!=='undefined')window.addEventListener('beforeunload',gridSaveFlush);
+// 进货单自动过账：借库存-食材(2-3000)、贷应付账款(3-1000)——进货默认视为赊账(符合业主"应付账款对账/付款"这套既有流程)。
+// 每个格子(供应商+品项+日期)自己的 ref，改数量/改价钱都会先冲销旧分录再记新的，不会重复入账。
+function postPurchaseLedger(sup,cid,date,item){
+  const arr=d().purchases||[];const rec=arr.find(r=>r.supplier===sup&&r.cid===cid&&r.date===date);
+  const ref='purchase:'+sup+':'+cid+':'+date;delEntriesByRef(ref);
+  const amt=rec?+(rec.price||0):0;
+  if(amt>0.005)postEntry(date,(LANG==="zh"?'进货 ':'Purchase ')+sup+' '+item,[{acc:'2-3000',dr:amt},{acc:'3-1000',cr:amt}],ref,nextDocNo('JV'));
+}
 async function setGridQty(mod,sup,cid,date,val){
   const qty=+val||0;const cfg=ledgerCfg(mod);d()[cfg.arr]=d()[cfg.arr]||[];const arr=d()[cfg.arr];
   const cat=gridCatRow(sup,cid);const item=cat?cat.name:'';
@@ -4051,6 +4177,7 @@ async function setGridQty(mod,sup,cid,date,val){
   else{if(!rec){rec={supplier:sup,date,cid,item,code:cat?cat.code:'',qty:0,weight:0,unitPrice:unit,price:0,note:''};arr.push(rec);}
     rec.cid=cid;rec.item=item;rec.unitPrice=unit;rec.qty=qty;rec.price=+(qty*unit).toFixed(2);if(cat){rec.code=cat.code;rec.uom=cat.uom||'';}rec.invoice=gridInv(mod,sup,date);
     if(mod==='purchase'){const dq=qty-oldQty;if(dq>0)invReceive(item,dq,dq*unit,null,null,date);else if(dq<0)invUnreceive(item,-dq);}}
+  if(mod==='purchase')postPurchaseLedger(sup,cid,date,item);
   gridRecalc(mod,sup);gridSave(mod,sup); // 即时算合计；存档延后防卡
 }
 /* 进货单：当天价钱每天可能浮动，独立于数量输入——填了自动 × 数量出金额 */
@@ -4064,6 +4191,7 @@ async function setGridDayPrice(mod,sup,cid,date,val){
     if(mod==='purchase'&&oldQty>0&&oldPrice!==price){invUnreceive(item,oldQty);invReceive(item,oldQty,oldQty*price,null,null,date);} // 价钱改了，库存加权成本跟着重算
     rec.unitPrice=price;rec.price=+((+rec.qty||0)*price).toFixed(2);
   }
+  if(mod==='purchase')postPurchaseLedger(sup,cid,date,item);
   gridRecalc(mod,sup);gridSave(mod,sup);
 }
 /* 月末盘点：单价不用手key，直接抓「进货单」当月该品项的加权平均价 */
