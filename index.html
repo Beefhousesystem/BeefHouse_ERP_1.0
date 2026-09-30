@@ -644,7 +644,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0930e";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="0930f";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -1452,8 +1452,11 @@ function postDailySales(){const zh=LANG==="zh";const date=(document.getElementBy
   sales.forEach(s=>{const r=(d().recipes||[]).find(x=>x.id===s.recipeId);if(!r)return;const rev=(+r.price||0)*(+s.qty||0);const cat=salesAcctCat(r.id);byCat[cat]=(byCat[cat]||0)+rev;});
   const total=Object.values(byCat).reduce((a,b)=>a+b,0);
   if(total<=0.005){alert(zh?'目前销售总额为0，没有东西可以过账':'Sales total is 0, nothing to post');return;}
+  // 收款方式拆分(比照 EPOS 360 Z-report 的做法：按现金/银行卡·电子钱包分开列)，预设全部算现金，可自行改现金那格，其余自动算银行/卡
+  const cashIn=Math.min(total,+((document.getElementById('sc_cash')||{}).value)||total);
+  const bankIn=+(total-cashIn).toFixed(2);
   const ref='sales:'+date;delEntriesByRef(ref);
-  const lines=[{acc:'2-1000',dr:+total.toFixed(2)}];
+  const lines=[];if(cashIn>0.005)lines.push({acc:'2-1000',dr:cashIn});if(bankIn>0.005)lines.push({acc:'2-1010',dr:bankIn});
   Object.keys(byCat).forEach(c=>{if(byCat[c]>0.005)lines.push({acc:SALES_CAT_ACC[c],cr:+byCat[c].toFixed(2)});});
   postEntry(date,(zh?'每日销售 ':'Daily Sales ')+date,lines,ref,nextDocNo('OR'));
   auditLog(zh?"每日销售过账":"Daily sales posted",date,"",money(total));
@@ -1465,8 +1468,9 @@ function salesCloseHTML(){const zh=LANG==="zh";const sales=(d().sales||[]).filte
   const byCat={buffet:0,alacarte:0,beverage:0};sales.forEach(s=>{const r=(d().recipes||[]).find(x=>x.id===s.recipeId);if(!r)return;byCat[salesAcctCat(r.id)]+=(+r.price||0)*(+s.qty||0);});
   const total=Object.values(byCat).reduce((a,b)=>a+b,0);
   const posted=ledger().filter(e=>e.ref&&e.ref.startsWith('sales:')).map(e=>e.ref.slice(6)).sort().reverse();
-  return `<div class="hint">${zh?'把当前系统里的销售数据(d().sales，来自"销售(POS)"页面)按类别过账成一笔收款分录。同一天可以重复结账(会先冲销旧的再记新的)，适合每天营业结束后按一次。品项类别第一次预设「单点」，可自行改成自助餐/饮料。':'Post today\'s sales snapshot as one OR entry by category. Re-closing the same date replaces the old entry.'}</div>
+  return `<div class="hint">${zh?'把当前系统里的销售数据(d().sales，来自"销售(POS)"页面)按类别过账成一笔收款分录，收款方式(现金/银行卡・电子钱包)拆分比照 POS 机的 Z-report 结账单做法。同一天可以重复结账(会先冲销旧的再记新的)，适合每天营业结束后按一次。品项类别第一次预设「单点」，可自行改成自助餐/饮料。':'Post today\'s sales snapshot as one OR entry, split by payment method like a POS Z-report. Re-closing the same date replaces the old entry.'}</div>
   <div class="fg2" style="margin-bottom:10px;"><div class="fr"><label>${zh?'结账日期':'Closing Date'}</label><input id="sc_date" type="date" value="${TODAY}"></div><div class="fr"><label>${zh?'今日销售总额':'Today\'s Total'}</label><input value="${money(total)}" disabled></div></div>
+  <div class="fg2" style="margin-bottom:10px;"><div class="fr"><label>${zh?'现金收款':'Cash Received'}</label><input id="sc_cash" type="number" step="0.01" value="${total.toFixed(2)}" data-total="${total}" oninput="document.getElementById('sc_bank').textContent=money(Math.max(0,(+this.dataset.total||0)-(+this.value||0)))"></div><div class="fr"><label>${zh?'银行卡/电子钱包(自动=总额-现金)':'Card/e-Wallet (auto)'}</label><input value="0" id="sc_bank_dummy" style="display:none;"><div class="mini" id="sc_bank" style="padding:8px;border:1px solid var(--line);border-radius:6px;">${money(0)}</div></div></div>
   <div class="card tbl" style="margin-bottom:10px;"><table><thead><tr><th>${zh?'菜品':'Item'}</th><th class="c">${zh?'数量':'Qty'}</th><th class="c">${zh?'金额':'Amount'}</th><th>${zh?'收入类别':'Revenue Category'}</th></tr></thead><tbody>${rows||`<tr><td colspan="4" class="empty">${zh?'目前没有销售数据(先去"销售(POS)"页面输入)':'No sales data yet'}</td></tr>`}</tbody></table></div>
   <button class="btn block brand" onclick="postDailySales()">💰 ${zh?'结账过账(生成OR)':'Close & Post (generates OR)'}</button>
   ${posted.length?`<div class="hint" style="margin-top:10px;">${zh?'已过账的日期：':'Already posted dates: '}${posted.slice(0,10).join('、')}</div>`:''}`;
@@ -4162,11 +4166,17 @@ function gridSaveFlush(){if(_gridSaveT){clearTimeout(_gridSaveT);_gridSaveT=null
 if(typeof window!=='undefined')window.addEventListener('beforeunload',gridSaveFlush);
 // 进货单自动过账：借库存-食材(2-3000)、贷应付账款(3-1000)——进货默认视为赊账(符合业主"应付账款对账/付款"这套既有流程)。
 // 每个格子(供应商+品项+日期)自己的 ref，改数量/改价钱都会先冲销旧分录再记新的，不会重复入账。
+// 进货付款方式：赊账(挂应付账款) 或 现金即付(直接扣现金)，逐供应商自己设定，会跟着记账科目跑
+function purchasePayMode(sup){return (d().purchasePayMode||{})[sup]||'credit';}
+function setPurchasePayMode(sup,mode){if(!d().purchasePayMode)d().purchasePayMode={};d().purchasePayMode[sup]=mode;save();
+  // 该供应商所有已存在的进货分录，改用新付款方式重新过账(冲销旧的、记新的)
+  (d().purchases||[]).filter(r=>r.supplier===sup&&+r.qty>0).forEach(r=>postPurchaseLedger(sup,r.cid,r.date,r.item));
+  render();}
 function postPurchaseLedger(sup,cid,date,item){
   const arr=d().purchases||[];const rec=arr.find(r=>r.supplier===sup&&r.cid===cid&&r.date===date);
   const ref='purchase:'+sup+':'+cid+':'+date;delEntriesByRef(ref);
-  const amt=rec?+(rec.price||0):0;
-  if(amt>0.005)postEntry(date,(LANG==="zh"?'进货 ':'Purchase ')+sup+' '+item,[{acc:'2-3000',dr:amt},{acc:'3-1000',cr:amt}],ref,nextDocNo('JV'));
+  const amt=rec?+(rec.price||0):0;const payAcc=purchasePayMode(sup)==='cash'?'2-1000':'3-1000';
+  if(amt>0.005)postEntry(date,(LANG==="zh"?'进货 ':'Purchase ')+sup+' '+item,[{acc:'2-3000',dr:amt},{acc:payAcc,cr:amt}],ref,nextDocNo('JV'));
 }
 async function setGridQty(mod,sup,cid,date,val){
   const qty=+val||0;const cfg=ledgerCfg(mod);d()[cfg.arr]=d()[cfg.arr]||[];const arr=d()[cfg.arr];
@@ -4211,7 +4221,8 @@ function gridTable(mod,sup,month){
   const cat=ensureGridCat(sup);const dates=gridDates(mod,sup,month);
   const inv=dt=>gridInv(mod,sup,dt);
   const S=gEsc(sup);
-  const controls=w?`<div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap;"><button class="btn gold sm" onclick="addGridItem('${S}')">+ ${zh?"品项":"Item"}</button><span class="mini" style="align-self:center;color:var(--muted);">${zh?"按住 ☰ 拖动排序 · ⧉复制 · 🗑删除":"drag ☰ · ⧉ copy · 🗑 delete"}</span></div>`:'';
+  const payModeCtl=(mod==='purchase')?`<div class="fr" style="display:inline-block;margin:0 0 8px;"><label class="mini">${zh?'付款方式(影响记账科目)':'Payment (affects accounting)'}</label><select ${w?'':'disabled'} onchange="setPurchasePayMode('${S}',this.value)"><option value="credit" ${purchasePayMode(sup)==='credit'?'selected':''}>${zh?'赊账(应付账款)':'Credit (AP)'}</option><option value="cash" ${purchasePayMode(sup)==='cash'?'selected':''}>${zh?'现金即付':'Cash on the spot'}</option></select></div>`:'';
+  const controls=w?`<div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap;"><button class="btn gold sm" onclick="addGridItem('${S}')">+ ${zh?"品项":"Item"}</button><span class="mini" style="align-self:center;color:var(--muted);">${zh?"按住 ☰ 拖动排序 · ⧉复制 · 🗑删除":"drag ☰ · ⧉ copy · 🗑 delete"}</span></div>${payModeCtl}`:payModeCtl;
   const rowCtl=(c,arrows)=>w?`<div class="growctl">${arrows==='ud'?`<span class="draghandle" title="${zh?'按住拖动排序':'Drag to reorder'}">☰</span>`:`<span class="ib" title="${zh?'左移':'Left'}" onclick="moveGridItem('${mod}','${S}','${c.cid}',-1)">←</span><span class="ib" title="${zh?'右移':'Right'}" onclick="moveGridItem('${mod}','${S}','${c.cid}',1)">→</span>`}<span class="ib" title="${zh?'复制此品项':'Duplicate'}" onclick="dupGridItem('${mod}','${S}','${c.cid}')">⧉</span><span class="ib gidel" title="${zh?'删除品项':'Delete'}" onclick="delGridItem('${mod}','${S}','${c.cid}','${month}')">🗑️</span></div>`:'';
 
   if(mod==='purchase'){
