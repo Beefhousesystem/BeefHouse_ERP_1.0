@@ -654,7 +654,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="0930i";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="1001a";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -2292,15 +2292,35 @@ function monthlyPnL(month){ // 月度损益（当月菜品成本×当月销量�
   const gp=rev-cogs;const mc=(d().monthClose||{})[month];const opex=(mc&&mc.locked&&mc.opex!=null)?mc.opex:opexTotal(month);const net=gp-opex;
   return {rev,cogs,gp,opex,net,margin:rev?gp/rev*100:0,foodPct:rev?cogs/rev*100:0,netPct:rev?net/rev*100:0,orders:ms.reduce((a,s)=>a+(+s.qty||0),0)};
 }
+/* 月末盘点(d().monthEnd)该月所有供应商/品项的总价值＝月末库存值，喂给下面的『成本算货法』算整体食材COGS。
+   跟上月的月末库存值接力当"本月月初库存"，不用再靠手动key的costConfig.openStock。 */
+function monthEndTotal(month){return (d().monthEnd||[]).filter(r=>(r.date||'').slice(0,7)===month).reduce((s,r)=>s+(+r.price||0),0);}
+/* monthPurchases() 本身是看全局 costMonth(给大盘用)，这里另外做一个按参数月份算的版本，
+   避免用全局变量导致「锁定的月份」跟「大盘当前选的月份」不一致时算错COGS。 */
+function monthPurchasesFor(month){let sum=0;(d().moves||[]).forEach(r=>{if(r.type==='in'&&String(r.date||'').slice(0,7)===month)sum+=(+r.amt||0);});(d().purchases||[]).forEach(r=>{if(String(r.date||'').slice(0,7)===month)sum+=(+r.price||0);});return sum;}
+function prevMonthKey(month){const[y,m]=month.split('-').map(Number);const dt=new Date(y,m-2,1);return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');}
+/* 牛室 buffet 主体走「成本算货法」：月初库存(=上月月末盘点值)+本月进货(monthPurchases,来自真实采购单)-本月月末盘点值=COGS，
+   月末锁定时自动记一笔(7-1000 食材成本-自助餐 / 2-3000 库存)，解锁时冲销。
+   ⚠️ 没有另外重复记"单点BOM(7-2000)"COGS——因为采购/库存是全店共用同一个池子，monthPurchases()已经把单点食材的进货也算进去了，
+   两边都记会重复计算；BOM那张表(月度核算页面上方的"配方成本×销量")目前只作为单品毛利参考，不单独过账。 */
+function postMonthlyCOGS(month){
+  const ref='monthlycogs:'+month;delEntriesByRef(ref);
+  const openStock=monthEndTotal(prevMonthKey(month));
+  const closeStock=monthEndTotal(month);
+  const pur=monthPurchasesFor(month);
+  const cogs=+Math.max(0,openStock+pur-closeStock).toFixed(2);
+  if(cogs>0.005)postEntry(month+'-28',(LANG==="zh"?'月度食材成本(成本算货法) ':'Monthly Food Cost ')+monthLabel2(month),[{acc:'7-1000',dr:cogs},{acc:'2-3000',cr:cogs}],ref,nextDocNo('JV'));
+}
 async function lockMonth(month){
-  if(!confirm(LANG==="zh"?`锁定 ${monthLabel2(month)} 的月度成本？锁定后该月原料均价与菜品成本归档固定，历史查询恒用此值，绝不串月。`:`Lock ${month}?`))return;
+  if(!confirm(LANG==="zh"?`锁定 ${monthLabel2(month)} 的月度成本？锁定后该月原料均价与菜品成本归档固定，历史查询恒用此值，绝不串月；并会把本月整体食材成本自动记进会计总账。`:`Lock ${month}?`))return;
   const avgPrices={};monthMaterials(month).forEach(x=>{avgPrices[x.item]=+x.avg.toFixed(4);});
   const dishCost={};(d().dishCosts||[]).forEach(dc=>{dishCost[dc.id]=+dishCostForMonth(dc,month).toFixed(4);});
   if(!d().monthClose)d().monthClose={};
   d().monthClose[month]={locked:true,date:TODAY,avgPrices,dishCost,opex:opexTotal(month),pnl:monthlyPnL(month)};
+  postMonthlyCOGS(month);
   auditLog("月度锁定",monthLabel2(month),"","");await save();render();
 }
-async function unlockMonth(month){if(!confirm(LANG==="zh"?`解锁 ${monthLabel2(month)}？改回按实时采购数据计算。`:`Unlock ${month}?`))return;if(d().monthClose&&d().monthClose[month]){delete d().monthClose[month];auditLog("解锁月度",monthLabel2(month),"","");await save();render();}}
+async function unlockMonth(month){if(!confirm(LANG==="zh"?`解锁 ${monthLabel2(month)}？改回按实时采购数据计算，总账里该月的食材成本分录也会一并冲销。`:`Unlock ${month}?`))return;if(d().monthClose&&d().monthClose[month]){delete d().monthClose[month];delEntriesByRef('monthlycogs:'+month);auditLog("解锁月度",monthLabel2(month),"","");await save();render();}}
 /* ★ POS 接口（按月）★ window.applyPOSSalesMonthly("2026-09",[{dishId,qty}]) */
 async function applyPOSSalesMonthly(month,arr){
   if(!d().monthlySales)d().monthlySales={};
@@ -2580,6 +2600,7 @@ async function saveOpexM(){
   const o=materializeOpex(m);
   OPEXM_KEYS.filter(k=>!OPEXLOG_SYNC_KEYS.includes(k)).forEach(k=>{const el=document.getElementById('oxm_'+k);if(el)o[k]=+el.value||0;});
   auditLog("录入OpEx","运营开销录入 "+monthLabel2(m),"",money(opexMSubtotal(o)));
+  postOpexMLedger(m);
   await save();
   alert(LANG==="zh"?("已保存 "+monthLabel2(m)+" 的运营开销：小计 "+money(opexMSubtotal(o))):("Saved "+monthLabel2(m)));
   render();
@@ -4028,7 +4049,7 @@ async function saveOpex(){
   if(monthLocked(costMonth))return alert(LANG==="zh"?"本月已锁定。":"Locked.");
   const o=materializeOpex(costMonth);
   Object.keys(o).filter(k=>!OPEXLOG_SYNC_KEYS.includes(k)).forEach(k=>{const el=document.getElementById('ox_'+k);if(el)o[k]=+el.value||0;});
-  auditLog("修改OpEx","运营开销更新 "+monthLabel2(costMonth),"","");await save();closeM();render();
+  auditLog("修改OpEx","运营开销更新 "+monthLabel2(costMonth),"","");postOpexMLedger(costMonth);await save();closeM();render();
 }
 function exportCSV(){
   const rows=[["品名 Item","分类 Cat","库存 Qty","单位 Unit","加权单价 W.Cost","净料成本 NetCost","库存值 Value","安全库存 Par","得率% Yield","状态 Status"]];
@@ -4598,6 +4619,15 @@ function formOpexLog(editIdx){
     <button class="btn block brand" onclick="saveOpexLog(${isEdit?editIdx:'null'})">${LANG==="zh"?"保存":"Save"}</button>`);
 }
 const OPEXLOG_ACCT={marketing:'8-3000',maintenance:'8-3010',wifi:'8-3020',rubbish:'8-3030',possaas:'8-3040',accounting:'8-3050',repair:'8-3010'};
+/* 租金/水电煤气(OPEXM_KEYS 里不走 opexLog 自动汇总的那5项)→ 每次保存「运营开销录入/运营开销」都自动过账，
+   跟报废/招待/运营开销记录同一套 ref+delEntriesByRef 重发模式，改金额/改月份都不会留重复分录。 */
+const OPEXM_ACCT={rent:'8-2000',commission:'8-2010',electricity:'8-2020',water:'8-2030',gas:'8-2040'};
+function postOpexMLedger(month){
+  if(!month)return;const ref='opexm:'+month;delEntriesByRef(ref);
+  const o=curOpex(month)||{};const lines=[];let total=0;
+  Object.keys(OPEXM_ACCT).forEach(k=>{const amt=+(+o[k]||0).toFixed(2);if(amt>0.005){lines.push({acc:OPEXM_ACCT[k],dr:amt});total+=amt;}});
+  if(total>0.005){lines.push({acc:'3-4000',cr:+total.toFixed(2)});postEntry(month+'-28',(LANG==="zh"?'运营开销(租金/水电煤气) ':'OpEx (Rent/Utilities) ')+monthLabel2(month),lines,ref,nextDocNo('JV'));}
+}
 async function saveOpexLog(editIdx){const g=id=>document.getElementById(id);
   const rec={date:g('ol_date').value||TODAY,cat:g('ol_cat').value,invoiceNo:g('ol_inv').value.trim(),amount:+g('ol_amt').value||0,note:g('ol_note').value.trim()};
   if(!d().opexLog)d().opexLog=[];
