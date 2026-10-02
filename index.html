@@ -67,6 +67,13 @@
       box-shadow:2px 0 4px rgba(0,0,0,.25) !important;z-index:5 !important;
     }
     .gtbl thead th.gname{z-index:6 !important;}
+    /* 业主反馈：品名钉住后，格子里"☰拖动/⧉复制/🗑删除"这排按钮太大，把品名字遮住/挤成一行被裁断——
+       窄屏下把这排按钮整体缩小(图标更小、间距更紧)，让品名文字有足够空间显示，不再被按钮占掉大半格子。 */
+    .gtbl td.gname .growctl{gap:1px !important;margin-top:2px !important;}
+    .gtbl td.gname .growctl .ib,.gtbl td.gname .growctl .draghandle{
+      font-size:9px !important;padding:1px 2px !important;line-height:1 !important;min-width:0 !important;min-height:0 !important;
+    }
+    .gtbl td.gname input{font-size:11px !important;padding:2px !important;}
   }
   /* 手机上进货单/月末盘点表格日期栏很多，格子几乎被input占满，手指按下去容易被判定成"要点这个输入框"而不是"要拖动滚动"——
      明确给表格里的 input 也标注 touch-action:pan-x pan-y，告诉浏览器滑动手势优先交给外层 .gwrap 横向/纵向滚动，
@@ -693,7 +700,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="1002h";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="1002i";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
