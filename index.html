@@ -658,7 +658,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="1002c";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="1002d";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -5117,6 +5117,36 @@ function makeSortable(container){
 }
 function wireSortables(){document.querySelectorAll('[data-sort]').forEach(makeSortable);}
 
+/* 进货单/月末盘点表格(.gwrap)手机左右滑动：格子几乎被input塞满，光靠CSS touch-action
+   在部分手机浏览器(尤其iOS Safari)上对"可编辑元素"支持不完整，手指划过去常常还是被当成
+   要点这个输入框、滑不动表格。这里改成自己接管touchmove手动算scrollLeft/scrollTop——
+   移动量一超过门槛(6px)就视为"在滑表格"，自己動 scrollLeft/scrollTop 并挡掉默认行为；
+   没有明显移动(单纯点一下)才放行，照常对焦输入框打字，两者不冲突。 */
+function wireGridTouchScroll(){
+  document.querySelectorAll('.gwrap').forEach(el=>{
+    if(el._touchWired)return;el._touchWired=true;
+    let sx=0,sy=0,sl=0,st=0,moved=false,dragging=false;
+    el.addEventListener('touchstart',e=>{
+      if(e.touches.length!==1)return;
+      const t=e.touches[0];sx=t.clientX;sy=t.clientY;sl=el.scrollLeft;st=el.scrollTop;moved=false;dragging=true;
+    },{passive:true});
+    el.addEventListener('touchmove',e=>{
+      if(!dragging||e.touches.length!==1)return;
+      const t=e.touches[0];const dx=sx-t.clientX,dy=sy-t.clientY;
+      if(!moved&&(Math.abs(dx)>6||Math.abs(dy)>6))moved=true;
+      if(moved){el.scrollLeft=sl+dx;el.scrollTop=st+dy;e.preventDefault();}
+    },{passive:false});
+    el.addEventListener('touchend',()=>{
+      dragging=false;
+      if(moved){ // 划动结束那一下别误触发点击/对焦到刚好划过的输入框
+        const blockClick=ev=>{ev.stopPropagation();ev.preventDefault();};
+        el.addEventListener('click',blockClick,{capture:true,once:true});
+        setTimeout(()=>el.removeEventListener('click',blockClick,{capture:true}),50);
+      }
+    });
+  });
+}
+
 function render(){
   if(!pageAllowed(curPage)){curPage=firstAllowedPage();selSupplier=null;} // 权限收紧后自动落到可访问页
   renderTop();renderSidebar();syncTopH();
@@ -5126,6 +5156,7 @@ function render(){
   document.getElementById('pageHost').innerHTML=`<div class="page active">${banner}${preview}${(_pages[curPage]||pgDash)()}</div>`;
   const mn=document.querySelector('.main');if(mn)mn.classList.toggle('wide',['payrun','monthend'].includes(curPage)); // 宽表页用满宽
   wireSortables();
+  wireGridTouchScroll();
 }
 
 /* ================= 登录 / 身份验证 =================
