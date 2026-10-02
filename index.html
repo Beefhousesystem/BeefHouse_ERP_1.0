@@ -61,12 +61,16 @@
     .gtbl td.gpack,.gtbl th.gpack,.gtbl td.gprice,.gtbl th.gprice{
       position:static !important;box-shadow:none !important;
     }
-    .gtbl td.gname,.gtbl th.gname{
+    /* 业主要求：表头那格「品名」文字本身不用冻结(跟着表格横向滑走就好)，
+       但表身每一行实际的品项名字(td.gname)要继续冻结在左边——两者分开处理。 */
+    .gtbl td.gname{
       position:sticky !important;left:0 !important;min-width:92px !important;max-width:92px !important;
       width:92px !important;white-space:normal !important;font-size:11px !important;padding:5px 4px !important;
       box-shadow:2px 0 4px rgba(0,0,0,.25) !important;z-index:5 !important;
     }
-    .gtbl thead th.gname{z-index:6 !important;}
+    .gtbl th.gname{
+      position:static !important;box-shadow:none !important;min-width:92px !important;max-width:92px !important;width:92px !important;
+    }
     /* 业主反馈：品名钉住后，格子里"☰拖动/⧉复制/🗑删除"这排按钮太大，把品名字遮住/挤成一行被裁断——
        窄屏下把这排按钮整体缩小(图标更小、间距更紧)，让品名文字有足够空间显示，不再被按钮占掉大半格子。 */
     .gtbl td.gname .growctl{gap:1px !important;margin-top:2px !important;}
@@ -700,7 +704,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="1002i";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="1002j";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
