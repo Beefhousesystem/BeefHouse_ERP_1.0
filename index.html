@@ -51,13 +51,22 @@
      也就是说这4个栏位本身就已经塞满、甚至超出整个手机屏幕，不管左右怎么滑/怎么按按钮，
      都不可能空出任何画面来显示1-30号的日期栏，因为"钉住"的栏位永远盖住整个可视范围——
      这才是业主手机上"完全没反应"的真正原因，不是滑动手势或按钮逻辑的问题。
-     手机窄屏时直接取消这几栏的"钉住"效果，让整张表(含日期栏)当成普通表格一起左右滑动，
-     不再保留"滑到旁边品名还钉在左边"这个方便功能——窄屏下两者不能兼得，保证"滑得到1-30号"优先。 */
+     业主接着要求做成"像Google Sheet一样，左边固定栏+右边日期栏都能各自左右滑、还能上下滑"——
+     也就是冻结窗格(frozen pane)效果，不是把钉住整个拿掉。做法：只留"品名"一栏钉住(窄屏下缩到
+     92px，远小于常见手机屏幕393~430px)，Code/单位/规格改成不钉住、跟日期栏一起向左滑出画面，
+     这样画面上随时能看到"是哪道品项"(品名钉住)，同时右边有足够空间可以滑动看到1-30号日期栏，
+     鱼与熊掌(认得出品项 + 滑得到日期)两者兼顾，就是 Google Sheet 冻结首列的效果。 */
   @media(max-width:480px){
-    .gtbl td.gcode,.gtbl th.gcode,.gtbl td.gname,.gtbl th.gname,.gtbl td.gunit,.gtbl th.gunit,
-    .gtbl td.gpack,.gtbl th.gpack,.gtbl td.gprice,.gtbl th.gprice,.gtbl td.gdate,.gtbl th.gdate{
+    .gtbl td.gcode,.gtbl th.gcode,.gtbl td.gunit,.gtbl th.gunit,
+    .gtbl td.gpack,.gtbl th.gpack,.gtbl td.gprice,.gtbl th.gprice{
       position:static !important;box-shadow:none !important;
     }
+    .gtbl td.gname,.gtbl th.gname{
+      position:sticky !important;left:0 !important;min-width:92px !important;max-width:92px !important;
+      width:92px !important;white-space:normal !important;font-size:11px !important;padding:5px 4px !important;
+      box-shadow:2px 0 4px rgba(0,0,0,.25) !important;z-index:5 !important;
+    }
+    .gtbl thead th.gname{z-index:6 !important;}
   }
   /* 手机上进货单/月末盘点表格日期栏很多，格子几乎被input占满，手指按下去容易被判定成"要点这个输入框"而不是"要拖动滚动"——
      明确给表格里的 input 也标注 touch-action:pan-x pan-y，告诉浏览器滑动手势优先交给外层 .gwrap 横向/纵向滚动，
@@ -684,7 +693,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="1002g";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="1002h";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
