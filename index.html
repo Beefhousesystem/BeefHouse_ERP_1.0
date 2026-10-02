@@ -37,6 +37,15 @@
      这正是手机上"滑不动、1-30号看不到"这次复查后确认的真正根因；iOS 13+原生 overflow:auto 本身滚动已经够顺滑，
      不需要这个旧属性。 */
   .gwrap{max-height:72vh;overflow:auto;border:1px solid #333;border-radius:6px;overscroll-behavior:contain;touch-action:pan-x pan-y;}
+  /* 手指滑动在不同手机/浏览器上是否能滑动格子里塞满input的表格，这几版试过CSS touch-action、
+     JS手动接管scrollLeft、拿掉-webkit-overflow-scrolling都没能在业主实机上重现成功——
+     在查清楚真正原因之前，先加回一条明确的◀▶按钮当保险，保证不管哪款手机/浏览器都至少有一条路能用，
+     不会被卡住没办法作业；划得动的话手指划一样有效，两者并存不冲突。 */
+  .ghscroll{display:none;}
+  @media(max-width:760px){
+    .ghscroll{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;background:var(--soft);border-radius:8px;padding:6px 10px;}
+    .ghscroll .ib{min-width:40px;min-height:36px;font-size:17px;font-weight:800;flex:none;}
+  }
   /* 手机上进货单/月末盘点表格日期栏很多，格子几乎被input占满，手指按下去容易被判定成"要点这个输入框"而不是"要拖动滚动"——
      明确给表格里的 input 也标注 touch-action:pan-x pan-y，告诉浏览器滑动手势优先交给外层 .gwrap 横向/纵向滚动，
      点一下(没有明显位移)才当作对焦输入框打字，两者不冲突：直接在格子上左右划就能看到每一天，点一下照常能key in。 */
@@ -662,7 +671,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="1002e";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="1002f";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -4357,7 +4366,7 @@ function gridTable(mod,sup,month){
     const dailyTot=dates.map(dt=>cat.reduce((s,c)=>{const r=gridRec(mod,sup,c.cid,dt);return s+(r?(+r.qty||0)*(+r.unitPrice||0):0);},0));
     const grand=dailyTot.reduce((a,b)=>a+b,0);
     const dailyRow=`<tr class="gsum"><td class="gcode"></td><td class="gname">${zh?"每日合计RM":"Daily Total"}</td><td class="gunit"></td><td class="gpack"></td>${dailyTot.map((v,j)=>`<td id="gtd-${j}">${money(v)}</td>`).join('')}<td></td><td></td></tr>`;
-    return `${controls}<div class="gwrap"><table class="gtbl"><thead><tr>${head}</tr></thead><tbody data-sort="grid" data-sup="${(sup||'').replace(/"/g,'&quot;')}">${body}</tbody><tbody><tr class="gsum"><td class="gcode"></td><td class="gname">${zh?"本月合计":"Month Total"}</td><td class="gunit"></td><td class="gpack"></td>${dates.map(()=>'<td></td>').join('')}<td></td><td id="gtg">${money(grand)}</td></tr>${dailyRow}</tbody></table></div>`;
+    return `${controls}${gridHScrollBar()}<div class="gwrap"><table class="gtbl"><thead><tr>${head}</tr></thead><tbody data-sort="grid" data-sup="${(sup||'').replace(/"/g,'&quot;')}">${body}</tbody><tbody><tr class="gsum"><td class="gcode"></td><td class="gname">${zh?"本月合计":"Month Total"}</td><td class="gunit"></td><td class="gpack"></td>${dates.map(()=>'<td></td>').join('')}<td></td><td id="gtg">${money(grand)}</td></tr>${dailyRow}</tbody></table></div>`;
   }
 
   // 其余(如月末盘点)：维持依品项数量自动切换排版；单价改抓「进货单」当月加权均价，不给手动改
@@ -4371,7 +4380,7 @@ function gridTable(mod,sup,month){
     const head=`<th class="gcode">Code</th><th class="gname">${zh?"品名":"Item"}</th><th class="gunit">${zh?"单位":"Unit"}</th><th class="gpack">${zh?"规格/送货":"Pack"}</th><th class="gprice">${zh?"月均价":"Avg Price"}</th>`+dates.map(dt=>`<th class="gcell">${w?`<input placeholder="Invoice No." value="${inv(dt)}" onchange="setGridInv('${mod}','${S}','${dt}',this.value)">`:`<span class="mini">${inv(dt)||'—'}</span>`}<div class="mini" style="margin-top:2px;">${dt.slice(5)}</div></th>`).join('')+`<th>${zh?"合计量":"Total Qty"}</th><th>${zh?"合计RM":"Total RM"}</th>`;
     const body=cat.map((c,i)=>`<tr data-sortid="${c.cid}"><td class="gcode"><input value="${c.code||''}" ${w?'':'disabled'} onchange="setGridCode('${mod}','${S}','${c.cid}',this.value)"></td><td class="gname"><input style="text-align:left;font-weight:700;" value="${(c.name||'').replace(/"/g,'&quot;')}" ${w?'':'disabled'} onchange="setGridName('${mod}','${S}','${c.cid}',this.value)">${rowCtl(c,'ud')}</td><td class="gunit"><input value="${c.uom||''}" ${w?'':'disabled'} onchange="setGridUom('${mod}','${S}','${c.cid}',this.value)"></td><td class="gpack"><input placeholder="10kg x 6/ctn" value="${(c.spec||'').replace(/"/g,'&quot;')}" ${w?'':'disabled'} onchange="setGridSpec('${mod}','${S}','${c.cid}',this.value)"></td><td class="gprice"><input type="number" step="0.01" value="${avg(c).toFixed(2)}" disabled title="${avgTitle}"></td>${dates.map((dt,j)=>`<td class="gcell"><input type="number" step="0.01" value="${q(c.cid,dt)}" ${w?'':'disabled'} oninput="setGridQty('${mod}','${S}','${c.cid}','${dt}',this.value)"></td>`).join('')}<td class="gtot" id="gtq-${i}">${num(rQty(c),2)}</td><td class="gtot" id="gta-${i}">${money(rAmt(c))}</td></tr>`).join('')||`<tr><td colspan="${7+dates.length}" class="empty">${zh?"点『+ 品项』添加":"Add items"}</td></tr>`;
     const dailyRow=`<tr class="gsum"><td class="gcode"></td><td class="gname">${zh?"每日合计RM":"Daily Total"}</td><td class="gunit"></td><td class="gpack"></td><td class="gprice"></td>${dates.map((dt,j)=>`<td id="gtd-${j}">${money(cat.reduce((s,c)=>s+(+q(c.cid,dt)||0)*avg(c),0))}</td>`).join('')}<td></td><td></td></tr>`;
-    return `${controls}<div class="gwrap"><table class="gtbl"><thead><tr>${head}</tr></thead><tbody data-sort="grid" data-sup="${(sup||'').replace(/"/g,'&quot;')}">${body}</tbody><tbody><tr class="gsum"><td class="gcode"></td><td class="gname">${zh?"本月合计":"Month Total"}</td><td class="gunit"></td><td class="gpack"></td><td class="gprice"></td>${dates.map(()=>'<td></td>').join('')}<td></td><td id="gtg">${money(grand)}</td></tr>${dailyRow}</tbody></table></div>`;
+    return `${controls}${gridHScrollBar()}<div class="gwrap"><table class="gtbl"><thead><tr>${head}</tr></thead><tbody data-sort="grid" data-sup="${(sup||'').replace(/"/g,'&quot;')}">${body}</tbody><tbody><tr class="gsum"><td class="gcode"></td><td class="gname">${zh?"本月合计":"Month Total"}</td><td class="gunit"></td><td class="gpack"></td><td class="gprice"></td>${dates.map(()=>'<td></td>').join('')}<td></td><td id="gtg">${money(grand)}</td></tr>${dailyRow}</tbody></table></div>`;
   }
   const head=`<th class="gdate">${zh?"日期":"Date"}</th><th>Invoice No.</th>`+cat.map(c=>`<th>${w?`<div class="gih"><input style="font-weight:700;" value="${(c.name||'').replace(/"/g,'&quot;')}" onchange="setGridName('${mod}','${S}','${c.cid}',this.value)">${rowCtl(c,'lr')}</div>`:oEsc(c.name)}</th>`).join('')+`<th>${zh?"当日RM":"Amt"}</th>`;
   const codeRow=`<tr class="ghdr"><td class="gdate ghlab">Code</td><td></td>${cat.map(c=>`<td><input value="${c.code||''}" ${w?'':'disabled'} onchange="setGridCode('${mod}','${S}','${c.cid}',this.value)"></td>`).join('')}<td></td></tr>`;
@@ -4379,7 +4388,7 @@ function gridTable(mod,sup,month){
   const uomRow=`<tr class="ghdr"><td class="gdate ghlab">${zh?"单位":"Unit"}</td><td></td>${cat.map(c=>`<td><input value="${c.uom||''}" ${w?'':'disabled'} onchange="setGridUom('${mod}','${S}','${c.cid}',this.value)"></td>`).join('')}<td></td></tr>`;
   const specRow=`<tr class="ghdr ghdr-end"><td class="gdate ghlab">${zh?"规格":"Pack"}</td><td></td>${cat.map(c=>`<td><input placeholder="10kg x 6/ctn" value="${(c.spec||'').replace(/"/g,'&quot;')}" ${w?'':'disabled'} onchange="setGridSpec('${mod}','${S}','${c.cid}',this.value)"></td>`).join('')}<td></td></tr>`;
   const body=dates.map((dt,j)=>{const dayAmt=cat.reduce((s,c)=>s+(+q(c.cid,dt)||0)*avg(c),0);return `<tr><td class="gdate">${dt.slice(5)}</td><td>${w?`<input placeholder="Invoice No." value="${inv(dt)}" onchange="setGridInv('${mod}','${S}','${dt}',this.value)">`:(inv(dt)||'—')}</td>${cat.map((c,i)=>`<td class="gcell"><input type="number" step="0.01" value="${q(c.cid,dt)}" ${w?'':'disabled'} oninput="setGridQty('${mod}','${S}','${c.cid}','${dt}',this.value)"></td>`).join('')}<td class="gtot" id="gtd-${j}">${money(dayAmt)}</td></tr>`;}).join('')||`<tr><td colspan="${cat.length+3}" class="empty">${zh?"点『+ 品项』添加品项":"Add items"}</td></tr>`;
-  return `${controls}<div class="gwrap"><table class="gtbl"><thead><tr>${head}</tr></thead><tbody>${cat.length?codeRow+priceRow+uomRow+specRow:''}${body}<tr class="gsum"><td class="gdate">${zh?"合计":"Total"}</td><td></td>${cat.map((c,i)=>`<td id="gta-${i}">${money(rAmt(c))}</td>`).join('')}<td id="gtg">${money(grand)}</td></tr></tbody></table></div>`;
+  return `${controls}${gridHScrollBar()}<div class="gwrap"><table class="gtbl"><thead><tr>${head}</tr></thead><tbody>${cat.length?codeRow+priceRow+uomRow+specRow:''}${body}<tr class="gsum"><td class="gdate">${zh?"合计":"Total"}</td><td></td>${cat.map((c,i)=>`<td id="gta-${i}">${money(rAmt(c))}</td>`).join('')}<td id="gtg">${money(grand)}</td></tr></tbody></table></div>`;
 }
 
 function pgLedger(mod){
@@ -5161,6 +5170,20 @@ function render(){
   const mn=document.querySelector('.main');if(mn)mn.classList.toggle('wide',['payrun','monthend'].includes(curPage)); // 宽表页用满宽
   wireSortables();
   wireGridTouchScroll();
+  initGhScroll();
+}
+/* 手机手指划动在业主实机上多次尝试都没能确认有效前，先加这条保险的◀▶按钮，保证一定有办法能看到每一天。 */
+function initGhScroll(){
+  document.querySelectorAll('.ghscroll').forEach(bar=>{
+    const wrap=bar.nextElementSibling;
+    if(!wrap||!wrap.classList||!wrap.classList.contains('gwrap'))return;
+    const max=Math.max(0,wrap.scrollWidth-wrap.clientWidth);
+    if(max<=2){bar.style.display='none';}
+  });
+}
+function scrollGridH(btn,dir){const wrap=btn.closest('.ghscroll').nextElementSibling;if(!wrap)return;wrap.scrollBy({left:dir*150,behavior:'smooth'});}
+function gridHScrollBar(){const zh=LANG==="zh";
+  return `<div class="ghscroll"><button class="ib" onclick="scrollGridH(this,-1)" title="${zh?'左移':'Left'}">◀ ${zh?'前一天':'Prev'}</button><span class="mini">${zh?'也可以直接用手指左右划':'or swipe left/right'}</span><button class="ib" onclick="scrollGridH(this,1)" title="${zh?'右移':'Right'}">${zh?'后一天':'Next'} ▶</button></div>`;
 }
 
 /* ================= 登录 / 身份验证 =================
