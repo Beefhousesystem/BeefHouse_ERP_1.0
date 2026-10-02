@@ -46,6 +46,19 @@
     .ghscroll{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;background:var(--soft);border-radius:8px;padding:6px 10px;}
     .ghscroll .ib{min-width:40px;min-height:36px;font-size:17px;font-weight:800;flex:none;}
   }
+  /* 真正找到的根因(2026-10-02)：CODE+品名+单位+规格 这4个"钉住不动"的栏位(position:sticky)
+     加起来宽度是 74+180+56+120=430px——比 iPhone 15 Pro 的屏幕宽度(393px)还要宽！
+     也就是说这4个栏位本身就已经塞满、甚至超出整个手机屏幕，不管左右怎么滑/怎么按按钮，
+     都不可能空出任何画面来显示1-30号的日期栏，因为"钉住"的栏位永远盖住整个可视范围——
+     这才是业主手机上"完全没反应"的真正原因，不是滑动手势或按钮逻辑的问题。
+     手机窄屏时直接取消这几栏的"钉住"效果，让整张表(含日期栏)当成普通表格一起左右滑动，
+     不再保留"滑到旁边品名还钉在左边"这个方便功能——窄屏下两者不能兼得，保证"滑得到1-30号"优先。 */
+  @media(max-width:480px){
+    .gtbl td.gcode,.gtbl th.gcode,.gtbl td.gname,.gtbl th.gname,.gtbl td.gunit,.gtbl th.gunit,
+    .gtbl td.gpack,.gtbl th.gpack,.gtbl td.gprice,.gtbl th.gprice,.gtbl td.gdate,.gtbl th.gdate{
+      position:static !important;box-shadow:none !important;
+    }
+  }
   /* 手机上进货单/月末盘点表格日期栏很多，格子几乎被input占满，手指按下去容易被判定成"要点这个输入框"而不是"要拖动滚动"——
      明确给表格里的 input 也标注 touch-action:pan-x pan-y，告诉浏览器滑动手势优先交给外层 .gwrap 横向/纵向滚动，
      点一下(没有明显位移)才当作对焦输入框打字，两者不冲突：直接在格子上左右划就能看到每一天，点一下照常能key in。 */
@@ -671,7 +684,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="1002f";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="1002g";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -5181,7 +5194,7 @@ function initGhScroll(){
     if(max<=2){bar.style.display='none';}
   });
 }
-function scrollGridH(btn,dir){const wrap=btn.closest('.ghscroll').nextElementSibling;if(!wrap)return;wrap.scrollBy({left:dir*150,behavior:'smooth'});}
+function scrollGridH(btn,dir){const wrap=btn.closest('.ghscroll').nextElementSibling;if(!wrap)return;wrap.scrollLeft=wrap.scrollLeft+dir*150;}
 function gridHScrollBar(){const zh=LANG==="zh";
   return `<div class="ghscroll"><button class="ib" onclick="scrollGridH(this,-1)" title="${zh?'左移':'Left'}">◀ ${zh?'前一天':'Prev'}</button><span class="mini">${zh?'也可以直接用手指左右划':'or swipe left/right'}</span><button class="ib" onclick="scrollGridH(this,1)" title="${zh?'右移':'Right'}">${zh?'后一天':'Next'} ▶</button></div>`;
 }
