@@ -1,4 +1,77 @@
-# 项目备忘 (CLAUDE.md)
+# 项目备忘 (CLAUDE.md) — 牛室 Beef House ERP
+
+> 业主分三个对话维护三样东西：**① 明记 ERP　② 牛室 ERP（本仓库）　③ 明记官网**。本文件只讲 ②。
+> 换账号/新对话时：**先读下面的「交接总览」就够了**；再往下是按日期追加的历史记录（很长，约 700 行），需要查某个功能时用标题或关键字搜，不要整份读完。
+> ⚠️ 本仓库是**公开**的。绝不能把 service_role、API Key、VAPID 私钥、密码写进来；**邀请码目前就写在下面「注册邀请码」那节，等于公开了**（见「安全待办」）。
+
+## 🔑 交接总览（2026-11-02 整理）
+
+### 三个仓库的分工
+| | 仓库 | 是什么 | Supabase |
+|---|---|---|---|
+| ① 明记 ERP | `Mengkeesystem/ERP-testing-1.0` | 明记（中餐小食店，11 间分店 + 中央厨房）的 ERP，代码从牛室同步过去、**数据和配置完全是明记自己的**；它有自己的 CLAUDE.md | 明记自己的项目 `kmcdokwiyetlmsrdlgqw`（同一个项目里还放着官网后台的 `web_*`） |
+| ② **牛室 ERP（本仓库）** | `Beefhousesystem/BeefHouse_ERP_1.0` | 牛室（Western buffet 牛排店，**目前只有 Setapak 一间 + 中央厨房**）的 ERP，**新功能先在这里做，业主要时再搬去明记** | **牛室独立的项目 `cogxtzduusuzjumsdkxy`**，**绝不能跟明记混** |
+| ③ 明记官网 | `Mengkeesystem/restoranmengkee` | 明记客人看的官网（网上点餐、HitPay、员工后台）；**牛室官网还没开始**，以后照明记那套复制 | 用明记 ERP 的项目（`web_*`） |
+- 牛室跟明记**两套数据库互相隔离**，两边各有自己的 Claude 会话，**都有权限推对方仓库的 `main`**（例如提示音就是牛室会话推去明记的）。
+
+### 这是什么
+- 单文件 HTML ERP：`index.html`（约 5500 行，**没有构建步骤**）+ `sw.js` + `order-data.js` + `manifest.webmanifest` + 图标 + `supabase-schema.sql`（建表 + RLS + 邀请码触发器）+ `push-schema.sql` + `supabase/`（推送函数）+ `PUSH_SETUP.md` / `STORAGE_SETUP.md`。
+- **当前版本：`BUILD="1002j"`**（`index.html` 约 707 行），`sw.js` 的 `SW_VERSION` 要同步一样（每次改动两处一起 +1）。最后一次改动 2026-10-02。
+- 部署：GitHub Pages，**直接推 `main` 就上线**（业主 2026-09-25 起要求「改完自动推，不开分支、不开 PR」）。⚠️ 云端会话有时被指定一个 `claude/xxx` 工作分支；**GitHub Pages 只认 `main`，新账号也是读 `main` 上的 CLAUDE.md**，所以改动最后一定要进 `main`。仓库后来从个人账号 `yxchong3` 移到 `Beefhousesystem` 组织；旧文件里写的网址 `yxchong3.github.io/BeefHouse_ERP_1.0/` 现在是不是还在用，要业主确认。
+- 数据：登录后存 Supabase `erp_store`（key `erpv2:<分店id>`、`erpv2:payroll:<分店id>`（薪资，单独上锁）、`erpv2:roleperms`、`erpv2:orders`）；改代码不会动数据。
+- 牛室定位：**buffet（B1 纯爱自助吧）整体走月度核算 + 月末算货；单点 B2–D4（牛扒/鸡扒/鱼排/海鲜/饮料）做 BOM**。侧栏「库存」组里「月末盘点」（`monthend`）放在原本「盘点」的位置；逐品项盘点 `stock`（`pgStock`）代码还在、只是从侧栏拿掉（**明记相反，明记主用盘点**）。
+
+### 怎么跟业主合作
+- **全部用中文**，白话、短句，先说结果。业主常给手机截图/录影：**录影要用 ffmpeg 逐帧拆开看**（`pip install imageio-ffmpeg`），不要靠猜。
+- 业主在 **iPhone** 上用：Playwright 视窗用 393×852（iPhone 15 Pro 真实尺寸）+ 375×667 + 桌面 1400×900；**headless Chromium 测不出 iOS 专属问题**（如 `-webkit-overflow-scrolling`），业主实机说不行就要信他，不要只靠模拟测试说「已验证」。手机上「滑不动/按钮没反应」先量「目标栏位像素宽度 vs 手机屏幕宽度」，不要预设是触摸事件问题（2026-10-02 就是这样绕了五圈）。
+- 流程：改 → 语法检查（抽出所有 `<script>` 跑 `node --check`）→ Playwright 测 → **bump `BUILD` + `SW_VERSION`** → 中文提交信息（结尾加系统给的 Co-Authored-By / Claude-Session 两行）→ 推 `main` → **在本文件按日期追加一条**（改了什么、为什么、怎么验证、复制给明记要不要改）。
+- 改了 `supabase-schema.sql`：光推 GitHub **不会**同步到线上，要提醒业主去 Supabase SQL Editor 手动跑；牛室曾踩过「线上数据库跟仓库不一样」的坑（线上早就绑了旧触发器 `handle_new_user`，要先 `select … from pg_trigger` 查线上实际绑的是哪个）。
+
+### 角色（`ROLES`，**代号跟明记不一样**）
+| 代号 | 名称 | 范围 | 薪资 |
+|---|---|---|---|
+| `owner` | 老板 | 全分店、全权 | 看全部个人明细，**不能编辑发放** |
+| `hrmanager` | 人事经理 | 权限同老板 | **唯一能编辑/执行薪资发放和改会计总账的角色**（`canRunPayroll`/`canEditAccounting`），不走邀请码，老板在「设置→白名单」手动改岗位 |
+| `area` | 区域副经理 | 全分店 | 只看总数（全部 + 各店小计），会计总账只读 |
+| `manager` | 店面经理（= 明记的 `outletmgr`） | 本店 | 看本店每位员工薪资明细，不能编辑 |
+| `headchef` / `staff` | 厨师长 / 员工 | 本店 | 只看自己 |
+| `ckmanager` / `ckstaff` | 中央经理 / 中央员工 | 锁定中央厨房 `ck` | `ckmanager` 看本店明细、`ckstaff` 只看自己 |
+- `SUPREME_OWNER_EMAIL`（业主本人邮箱，代码里有）= 系统最高权限账号：别的老板/人事经理/区域副经理都改不了它、删不了它；老板账号只有老板能碰。`isSupremeOwner()`/`saveUser`/`delUser`/`togglePerm` 里有守卫；SQL 里 `erp_users` 写入策略也有同样条件，**网页和 SQL 两处邮箱要同步**。
+- 闲置自动登出：老板/人事经理/区域副经理豁免（按**真实身份** `curUser.role` 判断，不是预览角色），其余 30 分钟无操作强制登出（先倒数 60 秒提醒；表单弹窗开着不计闲置）。
+- `currentEmpId()`（2026-09-30 已修）：按登录邮箱（员工档案 `loginEmail`）找员工，找不到回 `null`；员工第一次用「自助查看」前，人事要先在员工档案补登录邮箱。
+
+### Supabase / SQL 状态（业主手动跑；有没有逐个跑过没有书面确认）
+- `supabase-schema.sql` 是总脚本：第 1 部分 `erp_store`/`erp_users`、第 2 部分白名单 + `erp_is_admin()`/`erp_is_owner()`/`erp_users_is_empty()`、第 3 部分 `handle_new_user()` 邀请码触发器（**直接覆盖线上既有的同名函数**，不要另建触发器）、第 4 部分按分店隔离的 `erp_can_read_key`/`erp_can_write_key`（薪资 key 单独上锁；`erpv2:orders` 对所有已登录白名单用户开放）。**所有 RLS 函数必须 `language plpgsql`，不能 `language sql`**（会触发 42P17 无限递归，踩过两次）。
+- **以下两次 SQL 改动当时请业主重跑，有没有跑过没确认**：2026-09-24 `erp_can_read_key`（订货单 `erpv2:orders`）、2026-09-25 `erp_is_owner()` + `erp_users` 写入策略（最高权限账号保护）。没跑的话：店长/厨师长/中央角色在线上读不到订货单、最高权限账号只在网页端有保护。
+- Supabase 后台还要手动：Authentication → Email → 打开「Confirm email」；忘记密码要在 URL Configuration 的 Redirect URLs 里放牛室的网址。
+- 推送：Edge Function `send-order-push` + `erp_push_subs`（`push-schema.sql`、`PUSH_SETUP.md`）；部署时要关 Verify JWT。
+
+### 牛室现有功能（重点）
+进销存（进货单逐日记「数量+当天价钱」→ 自动算金额；月末盘点单价 = 当月进货**加权平均价**，唯读）、配方成本 BOM、月度核算（成本算货）、应付账款（对账/付款/账龄）、运营开销（租金/水电煤气手动；营销维修 Wifi 等 7 项靠「运营开销记录」逐笔登记自动汇总，那 7 项锁死不能手填）、人事（员工档案含银行资料/登录邮箱、考勤 GPS、排班、请假、薪资发放 Payroll Run：EPF/SOCSO/EIS/SL24J/PCB + OT + 公共假期 + Payslip 隐藏 OT 倍数 + CP39/Borang A/8A/银行代发/EA 表）、**会计总账**（复式记账，科目编号照 SQL Account 的 `X-XXXX`；自动过账：进货/报废/招待/运营开销/应付付款/薪资核定/租金水电/月度 COGS；销售按营业日手动「结账」按现金/银行卡拆分；固定资产折旧、应收账款、银行对账、SST 参考报表、PV/OR/JV 单据号、各报表可打印/导出；**只有人事经理能改，老板/区域副经理只读**）、PWA 自动更新（强制更新弹窗 + 版本铃铛 + 提示音：订单=Note 风两声、更新=Tri-tone 风三声）、忘记密码、XSS 转义（`oEsc`/`gEsc`）。
+- 手机版进货单/月末盘点表格（2026-10-02 最终状态）：只钉「品名」一栏（宽 92px），Code/单位/规格/日期栏可左右滑；表头「品名」不冻结；保留 JS 触摸接管 + ◀▶ 备用按钮；品名格里的 ☰⧉🗑 按钮缩小。**业主录影确认冻结方向是对的**，之后没有新反馈。
+
+### 已知限制 / 没做的
+- 会计总账：销售不是逐单自动过账（`d().sales` 是快照，等以后接 POS/EPOS 360 再改数据结构）；进货默认视为赊账（可按供应商切「现金即付」）；银行对账是手动；EA 表没有每月薪资历史快照（年中调薪的员工汇总会有出入）；SST 只是参考报表（正式以 MySST 为准）。**不是给审计盖章的系统，正式用之前要请会计师核对科目表和过账规则。**
+- 员工底薪/津贴字段仍存在 `erpv2:<店>` 主档案的 `staff` 里（同店的人技术上能翻到）；「岗位权限编辑器」改 `owner` 角色的限制只在网页端拦、数据库层没挡。
+- `BOM` 那笔单点毛利**不**另外过账（采购池是共用的，会重复计算），`7-2000` 科目保留给以后单点食材库存独立后用。
+
+### ⚠️ 安全待办（2026-11-02 复查发现，**业主还没处理**）
+1. **`PUSH_SETUP.md` 把 `VAPID_PRIVATE`（手机推送私钥）明文写在公开仓库**（明记的 `PUSH_SETUP_MENGKEE.md` 同样）。要换一组新密钥：新私钥只放 Supabase Function Secrets，新公钥更新 `index.html` 的 `VAPID_PUBLIC`，文档里的私钥删掉，大家重新开通知。
+2. **邀请码写在本文件「注册邀请码」那节**（公开仓库，任何人能看到并用来自己注册成店面经理/店长/中央经理…）。要么把仓库改私有（GitHub Pages 私有仓库要付费方案），要么换一批新码并从文档里拿掉；**换码时网页（`doAuthSignup` 附近）和 `handle_new_user()` 两处要同步**。
+3. 确认 Supabase 的「Confirm email」是开着的。
+
+### 搬功能去明记时（业主说要时）
+- 先看明记仓库 CLAUDE.md 的「牛室有、明记还没有」清单和「必须保留明记自己的」清单；**角色代号逐个换**（`hrmanager`→`hrmgr`、`manager`→`outletmgr`、`ckmanager`→`ckmgr`、`canRunPayroll`→明记的 `salaryLock` 做法）。
+- 本文件后面「📌 牛室近期变动记录（待排期搬去明记）」那节列了还没搬的 6 件事。
+- 明记 `SUPABASE_URL`/`SUPPLIER_CATALOG`/`OUTLETS`/`INVITE_CODES`/`appTitle`/图标/`VAPID_PUBLIC` 一律保留明记自己的。
+
+### 待确认
+- 上面两次 SQL 重跑有没有做、「Confirm email」是否打开、两个「安全待办」怎么处理。
+- 牛室现在的 GitHub Pages 网址（旧文件里是 `yxchong3.github.io/…`）。
+- 牛室开第二间分店时：每间新分店要一组专属邀请码（不能沿用 Setapak 这组）；`OUTLETS` 增加、`handle_new_user()` 同步改。
+- 牛室官网（还没开始）：照明记官网那套复制，但 buffet 要「只展示价格不能加购物车」、订位要分午/晚餐和成人/儿童人数——见本文件最后「餐厅官方网站」一节和官网仓库的 CLAUDE.md。
+
+---
 
 本仓库是 **牛室炙烤牛排 (Beef House)** 的单文件 HTML ERP（`index.html`）。
 业主同时经营 **明记家乡小食店（马来西亚中餐）**，后续会**把 Beef House 这套 ERP 复制给明记用**——
@@ -749,6 +822,7 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 - 复制给明记时：这是业主这次明确要求的细节调整，如果明记也想要同样的"表头不冻结、表身冻结"效果可以直接沿用，若明记业主偏好表头也冻结(跟 Google Sheet 冻结首列+首行都冻的标准做法一致)可以不搬这条，保留 1002h 的"表头表身都冻结"写法。
 
 ## 餐厅官方网站（给客人看）：先做明记，牛室之后照模式复制（2026-10-15）
+> **更新 2026-11-02：明记官网已经做完并上线**（网上点餐 + HitPay + 外送 + 员工后台…），全部内容和历史都在 **`Mengkeesystem/restoranmengkee` 仓库自己的 CLAUDE.md**，这里不再重复。牛室官网还没开始，要做时才用下面这一节的「复制给牛室」要点。
 业主要做餐厅对外官网，**先做明记**，牛室需要时照同一套模式复制。官网跟 ERP **完全分开**：**另开新的 GitHub 仓库**（业主自己建空仓库，再由我推代码），不放进 ERP 仓库，也不连 ERP 的 Supabase。
 - **功能**：介绍餐厅（故事、环境照、营业时间并自动显示营业中/已打烊、地址+Google Maps、电话/WhatsApp）、菜单（有图有价钱、招牌标签、售完）、网上订位（日期/时间/人数）、网上点餐自取（购物车）、优惠/节日套餐（按日期自动显示/过期隐藏）、Facebook/Instagram/Foodpanda/GrabFood 链接、中英切换。
 - **订位/点餐 → 转 WhatsApp**（业主选的）：客人提交后自动打开 WhatsApp，订单/订位内容自动组好发给店里号码，店员回复确认才算数。没有后台、没有月费。第二阶段如要订单直接进 ERP，要在该店自己的 Supabase 另开「只给匿名 insert」的表，不要碰 `erp_store`。
