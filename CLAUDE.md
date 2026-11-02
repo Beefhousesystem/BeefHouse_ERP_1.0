@@ -16,7 +16,7 @@
 
 ### 这是什么
 - 单文件 HTML ERP：`index.html`（约 5500 行，**没有构建步骤**）+ `sw.js` + `order-data.js` + `manifest.webmanifest` + 图标 + `supabase-schema.sql`（建表 + RLS + 邀请码触发器）+ `push-schema.sql` + `supabase/`（推送函数）+ `PUSH_SETUP.md` / `STORAGE_SETUP.md`。
-- **当前版本：`BUILD="1002j"`**（`index.html` 约 707 行），`sw.js` 的 `SW_VERSION` 要同步一样（每次改动两处一起 +1）。最后一次改动 2026-10-02。
+- **当前版本：`BUILD="1102a"`**（`index.html` 约 707 行），`sw.js` 的 `SW_VERSION` 要同步一样（每次改动两处一起 +1）。最后一次改动 2026-11-02（换 VAPID 密钥 + 邀请码移出仓库）。
 - 部署：GitHub Pages，**直接推 `main` 就上线**（业主 2026-09-25 起要求「改完自动推，不开分支、不开 PR」）。⚠️ 云端会话有时被指定一个 `claude/xxx` 工作分支；**GitHub Pages 只认 `main`，新账号也是读 `main` 上的 CLAUDE.md**，所以改动最后一定要进 `main`。仓库后来从个人账号 `yxchong3` 移到 `Beefhousesystem` 组织；旧文件里写的网址 `yxchong3.github.io/BeefHouse_ERP_1.0/` 现在是不是还在用，要业主确认。
 - 数据：登录后存 Supabase `erp_store`（key `erpv2:<分店id>`、`erpv2:payroll:<分店id>`（薪资，单独上锁）、`erpv2:roleperms`、`erpv2:orders`）；改代码不会动数据。
 - 牛室定位：**buffet（B1 纯爱自助吧）整体走月度核算 + 月末算货；单点 B2–D4（牛扒/鸡扒/鱼排/海鲜/饮料）做 BOM**。侧栏「库存」组里「月末盘点」（`monthend`）放在原本「盘点」的位置；逐品项盘点 `stock`（`pgStock`）代码还在、只是从侧栏拿掉（**明记相反，明记主用盘点**）。
@@ -144,22 +144,22 @@
 - 作业中心六项均**按月份分开**：进货单/月末盘点(网格月份tab)、报废损耗/招待/调拨(flatMonthTabs 按月筛选)；**退货/补货(grn)已重做**成「供应商→选月份→逐笔表单登记(退货/补货)」风格(pgReturns/formReturn，数据仍存 d().grn，settle=退货|补货)，不再用每日网格。订货单是实时模板(其订单在订单发票按月归档)。
 - 复制完，明记那边**可继续自行修改**（它有独立的一份代码+数据）。
 
-## 注册邀请码（牛室，2026-09）
+## 注册邀请码（牛室，2026-09；**2026-11-02 起真实邀请码不再写进仓库**，下表只是占位，真码只在业主手上和 Supabase 的 `handle_new_user()` 里）
 员工/管理层首次注册账号时，在注册表单「邀请码 / 口令」栏填入对应邀请码，由 Supabase 触发器识别并赋予角色和分店：
 
 | 角色 | 邀请码 | 分店 |
 |---|---|---|
-| 区域副经理 `area` | `tcymgmt888` | 全分店 |
-| Setapak店 店面经理 `manager` | `stpbhmgr888` | Setapak店 (b1) |
-| Setapak店 厨师长 `headchef` | `stpbhchef888` | Setapak店 (b1) |
-| Setapak店 员工 `staff` | `stpbhstaff888` | Setapak店 (b1) |
-| 中央经理 `ckmanager` | `tcymgr888` | 中央厨房 (ck) |
-| 中央员工 `ckstaff` | `tcystaff888` | 中央厨房 (ck) |
+| 区域副经理 `area` | `<CODE_AREA>` | 全分店 |
+| Setapak店 店面经理 `manager` | `<CODE_MANAGER>` | Setapak店 (b1) |
+| Setapak店 厨师长 `headchef` | `<CODE_HEADCHEF>` | Setapak店 (b1) |
+| Setapak店 员工 `staff` | `<CODE_STAFF>` | Setapak店 (b1) |
+| 中央经理 `ckmanager` | `<CODE_CKMANAGER>` | 中央厨房 (ck) |
+| 中央员工 `ckstaff` | `<CODE_CKSTAFF>` | 中央厨房 (ck) |
 
-⚠️ **2026-09-19 二次更新**：店面/厨师长/员工的邀请码从原本通用的 `bfmgr888`/`chef888`/`bfstaff888` 改成带 **Setapak 店名前缀**的 `stpbh*888`——因为以后可能会开更多分店，以后每开一间新分店都要给它专属的一组邀请码（不能沿用 Setapak 这组，否则新店员工会被分到 Setapak 去）。新增两个「中央厨房」专属角色 `ckmanager`/`ckstaff`（锁定在 `outlet='ck'`，见下方权限说明）。
+⚠️ **2026-09-19 二次更新**：店面/厨师长/员工的邀请码从原本通用的 `<旧码>`/`<旧码>`/`<旧码>` 改成带 **Setapak 店名前缀**的 `<店名前缀>*`——因为以后可能会开更多分店，以后每开一间新分店都要给它专属的一组邀请码（不能沿用 Setapak 这组，否则新店员工会被分到 Setapak 去）。新增两个「中央厨房」专属角色 `ckmanager`/`ckstaff`（锁定在 `outlet='ck'`，见下方权限说明）。
 
 ✅ **2026-09-19 更新**：邀请码判定逻辑已写进 `supabase-schema.sql`（第 3 部分，函数名 `handle_new_user`，绑在 `on_auth_user_created` 触发器上），需要去 Supabase SQL Editor 手动跑一遍脚本才会生效。前端 (`index.html` 的 `doAuthSignup`) 也加了「必填」校验，不填不给交。
-🐛 **踩过的坑（关键）**：牛室这个正式 Supabase 项目里，**`auth.users` 早就绑了一个同名触发器 `on_auth_user_created`（函数 `handle_new_user`）**，是这次对话之前就已经存在的旧逻辑——它认的邀请码是 `bmr888` / `BHMGR888` / `BHSTAFF123` 这种跟本备忘完全对不上的词，而且**任何邀请码填错/填了不认识的词，它都默默给 staff，不会拒绝**。一开始我们另外新建了一个名字不同的触发器 `on_auth_user_created_invite`，结果实际生效的还是旧的那个（新的建立指令当时没跑到/没生效），导致填对邀请码也还是被分配成 staff。**最终修法：直接把 `handle_new_user` 这个既有函数的内容覆盖成正确逻辑，不再另外建新触发器**——如果你之后又发现邀请码不生效，第一件事就是去查 `auth.users` 上实际绑的是哪个触发器、对应哪个函数，不要假设一定是本文件里这份在跑：
+🐛 **踩过的坑（关键）**：牛室这个正式 Supabase 项目里，**`auth.users` 早就绑了一个同名触发器 `on_auth_user_created`（函数 `handle_new_user`）**，是这次对话之前就已经存在的旧逻辑——它认的邀请码是 `<旧码>` / `<旧码>` / `<旧码>` 这种跟本备忘完全对不上的词，而且**任何邀请码填错/填了不认识的词，它都默默给 staff，不会拒绝**。一开始我们另外新建了一个名字不同的触发器 `on_auth_user_created_invite`，结果实际生效的还是旧的那个（新的建立指令当时没跑到/没生效），导致填对邀请码也还是被分配成 staff。**最终修法：直接把 `handle_new_user` 这个既有函数的内容覆盖成正确逻辑，不再另外建新触发器**——如果你之后又发现邀请码不生效，第一件事就是去查 `auth.users` 上实际绑的是哪个触发器、对应哪个函数，不要假设一定是本文件里这份在跑：
 ```sql
 select tgname, proname from pg_trigger t join pg_proc p on t.tgfoid=p.oid
 where tgrelid='auth.users'::regclass and not t.tgisinternal;
@@ -197,8 +197,8 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 
 ## 新增「中央经理/中央员工」两个角色，锁定在中央厨房分店（2026-09-19）
 业主参考明记那边已经有的「中央经理/中央员工」角色截图，要求牛室也加两个对应角色，权限只限中央厨房(`outlet:'ck'`)：
-- **中央经理 `ckmanager`**（邀请码 `tcymgr888`）：`can` = `["dash","proc","waste","ck","inv","stock","ap","opex","report","hr","attend","schedule","leave","payroll"]`。采购进销页里含订货单/进货单/退货补货/报废损耗（`proc`+`waste`），**不含跨店调拨**（没给 `transfer`）。`allBranch:false`，`hrScope`/`salaryView` 都是 `"branch"`（能看中央厨房员工的薪资明细，不能编辑），`approveLeave:true`。
-- **中央员工 `ckstaff`**（邀请码 `tcystaff888`）：`can` = `["transfer","ck","inv","stock","hr","attend","schedule","leave","payroll"]`。**没有 `dash`（看不到利润大盘）**，采购进销页**只有跨店调拨**这一张卡（因为只给了 `transfer`，没给 `proc`/`waste`）。`hrScope`/`salaryView` 都是 `"self"`，只能看自己的薪资/考勤。
+- **中央经理 `ckmanager`**（邀请码 `<CODE_CKMANAGER>`）：`can` = `["dash","proc","waste","ck","inv","stock","ap","opex","report","hr","attend","schedule","leave","payroll"]`。采购进销页里含订货单/进货单/退货补货/报废损耗（`proc`+`waste`），**不含跨店调拨**（没给 `transfer`）。`allBranch:false`，`hrScope`/`salaryView` 都是 `"branch"`（能看中央厨房员工的薪资明细，不能编辑），`approveLeave:true`。
+- **中央员工 `ckstaff`**（邀请码 `<CODE_CKSTAFF>`）：`can` = `["transfer","ck","inv","stock","hr","attend","schedule","leave","payroll"]`。**没有 `dash`（看不到利润大盘）**，采购进销页**只有跨店调拨**这一张卡（因为只给了 `transfer`，没给 `proc`/`waste`）。`hrScope`/`salaryView` 都是 `"self"`，只能看自己的薪资/考勤。
 - 两个角色的 `outlet` 由后台触发器自动锁定成 `'ck'`（`handle_new_user()` 里 `v_role in ('ckmanager','ckstaff')` 时把 `v_outlet` 设成 `'ck'`），业主在「设置→白名单」手动加人时也要记得把「所属分店」选成「中央厨房」。
 - 这两个角色权限清单是照着业主截图**近似还原**明记那边"中央经理/中央员工"角色的样子（明记是他们自己独立的一套代码，我没有直接权限去看，只能靠业主给的截图和文字描述反推）——如果实际用起来发现某个模块该给没给、或不该给却给了，随时可以让我再调整 `ckmanager`/`ckstaff` 的 `can` 数组。
 
@@ -835,3 +835,10 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 2. **牛室主体是 buffet 吃到饱**：buffet 不适合「加购物车自取」，要在 `index.html` 加「仅堂食/只展示价格」的品项选项（展示成人/儿童/长者、平日/周末、午/晚价钱）；单点牛扒/饮料照常可自取下单。
 3. **订位对 buffet 更重要**：订位表单可能要加「午餐/晚餐时段」「成人/儿童人数分开」。
 4. 牛室网站也要**另开独立仓库**，不跟明记共用。
+
+
+## 安全处理：换 VAPID 推送密钥 + 邀请码移出公开仓库（2026-11-02，BUILD 1102a）
+- **VAPID**：旧私钥曾明文写在公开仓库（已视为外泄、作废）。已产生新密钥：新公钥写进 `index.html` 的 `VAPID_PUBLIC`；新私钥只在 Supabase Edge Functions Secrets（`VAPID_PRIVATE`/`VAPID_PUBLIC`）；`PUSH_SETUP.md` 的私钥/公钥已换成占位字。业主要在 Supabase 改 Secrets、跑 `delete from public.erp_push_subs;`、各手机重新开 🔔。⚠️ 明记的 `PUSH_SETUP_MENGKEE.md` 同样问题，还没处理。
+- **邀请码**：6 个旧码全部作废，仓库里（本文件、`supabase-schema.sql`）全部换成 `<CODE_xxx>` 占位。新码由业主在 Supabase SQL Editor 跑 `handle_new_user()`（带真码）后生效，**真码不要再写回仓库**。旧码还留在 git 历史里，但已作废。
+- 以后换码：只改 Supabase 里的 `handle_new_user()`；网页不校验码对错，不用改 `index.html`。
+- 复制给明记：明记的 VAPID 私钥、邀请码同样要处理。

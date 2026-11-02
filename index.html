@@ -704,7 +704,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="1002j";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="1102a";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -1057,7 +1057,7 @@ const CLOUD_TABLE = "erp_store";
 /* ===== 手机后台推送（关掉网页也能收到）Web Push =====
    VAPID 公钥内建；后台发送函数默认指向本项目 Edge Function。
    需先在 Supabase 部署 send-order-push 函数并设好密钥（见 PUSH_SETUP.md）。*/
-const VAPID_PUBLIC = "BPHQNkdOiFVhx7PjHxw5pIMWZkjOaqzQNzGbh3M67Kf7HLjLI3FpH15kfzsQiPDrQ64lnVML8HTaa3_IMybkNEY";
+const VAPID_PUBLIC = "BA0zbNjrZ3ifUdLungX8DYv4VHAiftBV2IxO003bKw07HYH4X3CQ00FN7yGpxSjhfKqIDCS5XiGmEFfZA-_BgXM";
 const PUSH_FN_URL = SUPABASE_URL ? (SUPABASE_URL + "/functions/v1/send-order-push") : "";
 /* 付款收据存储桶（需在 Supabase Storage 建一个名为 receipts 的 bucket；未建则自动退回内嵌图片）*/
 const RECEIPT_BUCKET = "receipts";

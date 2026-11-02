@@ -130,21 +130,21 @@ create policy "erp_users admin or bootstrap write"
 -- 例外 2：yxchong3@gmail.com（老板本人）永远免邀请码，直接设为『老板』。
 --
 -- 邀请码对照表（如需改邀请码，改下面 case 里的字符串即可）：
---   tcymgmt888   → area      (区域副经理，全分店)
---   stpbhmgr888  → manager   (Setapak店 店面经理)
---   stpbhchef888 → headchef  (Setapak店 厨师长)
---   stpbhstaff888→ staff     (Setapak店 员工)
---   tcymgr888    → ckmanager (中央经理，锁定中央厨房分店)
---   tcystaff888  → ckstaff   (中央员工，锁定中央厨房分店，不含利润大盘)
--- 2026-09-19 更新：店面/厨师长/员工的邀请码从通用的 bfmgr888/chef888/bfstaff888
--- 改成带 Setapak 店名前缀的 stpbh*888——因为以后可能会开更多分店，每间分店
+--   <CODE_AREA>   → area      (区域副经理，全分店)
+--   <CODE_MANAGER>  → manager   (Setapak店 店面经理)
+--   <CODE_HEADCHEF> → headchef  (Setapak店 厨师长)
+--   <CODE_STAFF>→ staff     (Setapak店 员工)
+--   <CODE_CKMANAGER>    → ckmanager (中央经理，锁定中央厨房分店)
+--   <CODE_CKSTAFF>  → ckstaff   (中央员工，锁定中央厨房分店，不含利润大盘)
+-- 2026-09-19 更新：店面/厨师长/员工的邀请码从通用的 <旧码>/<旧码>/<旧码>
+-- 改成带 Setapak 店名前缀的 <店名前缀>*——因为以后可能会开更多分店，每间分店
 -- 要用各自专属的邀请码，不能再共用一组（否则新店员工用旧码注册，会被分到
 -- Setapak 店去）。以后再开新分店，照这个命名风格(店名缩写+mgr/chef/staff+888)
 -- 加新的邀请码分支即可，同时也要处理 outlet 该给哪个分店 id（见下面 v_outlet）。
 --
 -- ⚠️ 2026-09-19 发现：牛室这个正式项目里，`auth.users` 上早就绑了一个触发器
 -- `on_auth_user_created`（对应函数 `handle_new_user`），跟这里写的完全是两套
--- 独立逻辑——而且它认的邀请码是 'bmr888'/'BHMGR888'/'BHSTAFF123' 这种跟本备忘
+-- 独立逻辑——而且它认的邀请码是 '<旧码>'/'<旧码>'/'<旧码>' 这种跟本备忘
 -- 完全对不上的旧词，任何对不上的邀请码它都默默给 staff（不会拒绝）。
 -- 所以这里**直接复用 `handle_new_user` 这个既有的函数名**覆盖掉旧逻辑，
 -- 不再另外建一个 `on_auth_user_created_invite` 新触发器——避免同一张表上
@@ -166,12 +166,12 @@ begin
     v_role := 'owner';
   else
     v_role := case v_code
-      when 'tcymgmt888'    then 'area'
-      when 'stpbhmgr888'   then 'manager'
-      when 'stpbhchef888'  then 'headchef'
-      when 'stpbhstaff888' then 'staff'
-      when 'tcymgr888'     then 'ckmanager'
-      when 'tcystaff888'   then 'ckstaff'
+      when '<CODE_AREA>'    then 'area'
+      when '<CODE_MANAGER>'   then 'manager'
+      when '<CODE_HEADCHEF>'  then 'headchef'
+      when '<CODE_STAFF>' then 'staff'
+      when '<CODE_CKMANAGER>'     then 'ckmanager'
+      when '<CODE_CKSTAFF>'   then 'ckstaff'
       else null
     end;
 

@@ -36,8 +36,8 @@ Supabase → **Project Settings → Edge Functions → Secrets**（或 Functions
 
 | 名称 | 值 |
 |---|---|
-| `VAPID_PUBLIC`  | `BPHQNkdOiFVhx7PjHxw5pIMWZkjOaqzQNzGbh3M67Kf7HLjLI3FpH15kfzsQiPDrQ64lnVML8HTaa3_IMybkNEY` |
-| `VAPID_PRIVATE` | `tjvNwupr404AlsO3qnEXIXRMRU3RbhISX4PKXa5rbKo` |
+| `VAPID_PUBLIC`  | `<网页里的 VAPID_PUBLIC，见 index.html>` |
+| `VAPID_PRIVATE` | `<私钥只放 Supabase Secrets，绝不写进仓库>` |
 | `VAPID_SUBJECT` | `mailto:你的邮箱@example.com` |
 
 > `SUPABASE_URL` 与 `SUPABASE_SERVICE_ROLE_KEY` 是系统自带的，不用你填。
