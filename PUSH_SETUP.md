@@ -28,8 +28,10 @@ Supabase → **SQL Editor** → 新建查询 → 粘贴仓库里的 `push-schema
 Supabase → **Edge Functions** → **Create a function**：
 - 名称填：`send-order-push`（必须一模一样）
 - 把仓库 `supabase/functions/send-order-push/index.ts` 的内容整段贴进去
-- **部署时关闭 JWT 验证**：函数设置里把「Verify JWT」关掉（Off）。
+- **部署时「Verify JWT」保持关闭（Off）**：登录验证改由函数自己做——只有带牛室登录令牌、且邮箱在白名单里的人才能触发推送，其他人一律 403。
   （用 CLI 的话：`supabase functions deploy send-order-push --no-verify-jwt`）
+- **可选但建议**：在 Secrets 加 `ALLOWED_ORIGINS` = 牛室网页网址（只写到域名，例如 `https://beefhousesystem.github.io`，多个用逗号隔开）。没设的话默认就是这个网址。
+- **检查函数有没有部署好（不会发推送）**：浏览器打开 `你的Supabase网址/functions/v1/send-order-push?health=1`，看到 `{"ok":true}` 就正常；`{"ok":false,"problems":[…]}` 会说明缺什么。
 
 ### 3) 设置密钥（VAPID）
 Supabase → **Project Settings → Edge Functions → Secrets**（或 Functions 页的 Secrets），新增三个：

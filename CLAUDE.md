@@ -848,3 +848,14 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 - **邀请码**：6 个旧码全部作废，仓库里（本文件、`supabase-schema.sql`）全部换成 `<CODE_xxx>` 占位。新码由业主在 Supabase SQL Editor 跑 `handle_new_user()`（带真码）后生效，**真码不要再写回仓库**。旧码还留在 git 历史里，但已作废。
 - 以后换码：只改 Supabase 里的 `handle_new_user()`；网页不校验码对错，不用改 `index.html`。
 - 复制给明记：明记的 VAPID 私钥、邀请码同样要处理。
+
+## 安全：推送函数 send-order-push 加登录验证、限制内容和来源（2026-11-02）
+- 起因：明记官网对话转告——明记的推送函数没有任何身份验证（关了 Verify JWT、CORS 是 `*`），仓库公开，任何人都能向老板/经理手机发任意内容的推送。核对牛室的 `supabase/functions/send-order-push/index.ts`：**牛室同样有这个问题**。
+- 改法（只改了函数和 `PUSH_SETUP.md`，网页 `index.html` 没动，所以 BUILD 没变）：
+  1. 函数先验证调用者：取 `Authorization` 里的登录令牌，用牛室自己的 Supabase 查出邮箱，再确认邮箱在 `erp_users` 且 `active`，否则 403。网页的 `sendOrderPush()` 本来就带登录令牌，正常下单不受影响。
+  2. 标题和图标由服务器固定；`body` 限 120 字、去掉 `< >` 和控制字符。
+  3. CORS 只放行 `ALLOWED_ORIGINS`（Secrets，默认 `https://beefhousesystem.github.io`），不再是 `*`。⚠️ 这个默认网址是业主推测、**还没确认**；如果真实 Pages 网址不同，要在 Secrets 里设对，否则浏览器会被 CORS 拦住、订单推送静默失败（订单本身和 App 内提醒不受影响）。
+  4. 新增 `GET ?health=1`：只检查 VAPID 密钥和订阅表，绝不发推送。
+- **光推 GitHub 不会生效**：业主要去 Supabase → Edge Functions → `send-order-push` 重新贴上新代码部署，Verify JWT 继续保持关闭。
+- 已知没动的：`erp_push_subs` 的 RLS 是「任何登录用户可读写全部」（`push-schema.sql`），同店员工理论上能看到/删别人的订阅；要收紧需要改成只认本人的 email，另排期。
+- 复制给明记：明记的同一个函数要做一样的修法（明记官网对话已发现，由明记 ERP 对话处理）；明记的 `web-push`（官网）里 `staffOf()` 是现成的验证写法。
