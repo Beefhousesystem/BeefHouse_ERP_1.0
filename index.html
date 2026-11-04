@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
+<script>try{if(localStorage.getItem('bhTheme')!=='classic')document.documentElement.classList.add('sp');}catch(e){document.documentElement.classList.add('sp');}</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -333,6 +334,82 @@
   .bar-row .track{flex:1;background:var(--soft);border-radius:5px;height:18px;overflow:hidden;}
   .bar-row .fill{height:100%;border-radius:5px;}
   .bar-row .val{width:80px;text-align:right;flex-shrink:0;font-weight:700;font-size:11px;}
+  /* ===== 外观主题「SUPY 风格」(2026-11-04)：只改颜色/圆角/阴影，不动任何版面宽度与数据。
+     用 html.sp 开关；设置页可一键切回「经典」(localStorage bhTheme=classic，不用重新部署)。 ===== */
+  html.sp{
+    --ink:#1F1B3A;--ink2:#4A4668;--paper:#F6F5FB;--card:#FFFFFF;--line:#E9E7F3;
+    --brand:#5B3FD0;--brand2:#7C5CE6;--gold:#F2B417;--soft:#F1EFFA;--grey:#7A7691;
+    --sp-shadow:0 1px 2px rgba(31,27,58,.05),0 4px 14px rgba(31,27,58,.05);
+  }
+  html.sp body{background:var(--paper);}
+  /* 顶栏：白底 */
+  html.sp .top{background:#fff;color:var(--ink);border-bottom:1px solid var(--line);box-shadow:0 1px 6px rgba(31,27,58,.05);}
+  html.sp .top h1{color:var(--ink);}
+  html.sp .sel{background:var(--soft);color:var(--ink);border:1px solid var(--line);}
+  html.sp .lang{color:var(--ink);border-color:var(--line);background:#fff;}
+  html.sp .role-chip{background:var(--brand);color:#fff;}
+  html.sp #outletBadge{background:#FFF4D1!important;color:var(--ink)!important;}
+  /* 侧栏：浅色图标栏风格，选中=淡紫底+紫字 */
+  html.sp .side{background:#fff;color:var(--ink2);border-right:1px solid var(--line);}
+  html.sp .side .grp{color:#A29EBB;}
+  html.sp .side button{color:var(--ink2);border-radius:0 12px 12px 0;margin:1px 8px 1px 0;width:calc(100% - 8px);}
+  html.sp .side button:hover{background:var(--soft);}
+  html.sp .side button.active{background:#ECE8FB;color:var(--brand);border-left-color:var(--brand);}
+  /* 卡片/指标 */
+  html.sp .card,html.sp .kpi,html.sp .pl{border:1px solid var(--line);border-radius:14px;box-shadow:var(--sp-shadow);}
+  html.sp .kpi .v{color:var(--ink);}
+  html.sp .h{color:var(--ink);}
+  html.sp .h .tag{background:var(--soft);color:var(--grey);}
+  /* 按钮 */
+  html.sp .btn{background:var(--brand);color:#fff;border-radius:10px;}
+  html.sp .btn.brand{background:var(--brand);}
+  html.sp .btn.gold{background:var(--gold);color:var(--ink);}
+  html.sp .btn.ghost{background:#fff;color:var(--brand);border:1.5px solid var(--line);}
+  html.sp .seg{background:var(--soft);border-radius:11px;}
+  html.sp .seg button.active{background:#fff;color:var(--brand);box-shadow:0 1px 3px rgba(31,27,58,.12);}
+  /* 表格/表单/提示 */
+  html.sp th{background:#F7F6FD;color:var(--grey);}
+  html.sp td{border-bottom-color:#F1EFFA;}
+  html.sp .hint{background:#F1EEFD;color:#3B2F86;border-radius:11px;}
+  html.sp input:focus,html.sp select:focus,html.sp textarea:focus{outline-color:var(--brand2);}
+  html.sp .pill.p-b{background:#ECE8FB;color:var(--brand);}
+  /* ===== 数据看板（SUPY 风格）===== */
+  .bd-tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--line);margin:4px 0 12px;padding-bottom:0;-webkit-overflow-scrolling:auto;}
+  .bd-tabs button{flex:none;background:none;border:none;border-bottom:3px solid transparent;padding:9px 12px;font-size:12.5px;font-weight:700;color:var(--grey);cursor:pointer;white-space:nowrap;}
+  .bd-tabs button.on{color:var(--brand);border-bottom-color:var(--brand);}
+  .bd-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
+  .bd-bar select{background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 12px;font-size:12.5px;font-weight:700;color:var(--brand);}
+  .bd-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px;}
+  @media(min-width:760px){.bd-kpis{grid-template-columns:repeat(3,1fr);}}
+  .bd-kpi{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 12px 11px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;box-shadow:var(--sp-shadow);}
+  .bd-kpi .t{font-size:11px;color:var(--grey);font-weight:700;}
+  .bd-kpi .v{font-size:19px;font-weight:800;margin-top:4px;color:var(--ink);letter-spacing:-.01em;white-space:nowrap;}
+  .bd-kpi>div:first-child{min-width:0;}
+  @media(max-width:480px){.bd-kpi{padding:11px 10px;}.bd-kpi .v{font-size:15.5px;}.bd-ic{width:32px;height:32px;font-size:15px;}}
+  @media(min-width:760px){.bd-kpis.k4{grid-template-columns:repeat(4,1fr);}}
+  .bd-kpi .s{font-size:10.5px;font-weight:700;margin-top:3px;color:#1E9B6A;}
+  .bd-kpi .s.bad{color:#C2410C;}.bd-kpi .s.mut{color:var(--grey);}
+  .bd-ic{flex:none;width:38px;height:38px;border-radius:50%;background:#F1EEFD;display:flex;align-items:center;justify-content:center;font-size:17px;}
+  .bd-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:13px;margin-bottom:12px;box-shadow:var(--sp-shadow);}
+  .bd-card h3{font-size:13px;font-weight:800;margin-bottom:2px;color:var(--ink);}
+  .bd-card .sub2{font-size:10.5px;color:var(--grey);margin-bottom:10px;}
+  .bd-row{display:grid;grid-template-columns:minmax(70px,30%) 1fr auto;gap:8px;align-items:center;margin:7px 0;font-size:12px;}
+  .bd-row .nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .bd-track{background:#F1EEFD;border-radius:999px;height:12px;overflow:hidden;}
+  .bd-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#B7A5F5,#5B3FD0);}
+  .bd-fill.y{background:linear-gradient(90deg,#FBE08A,#F2B417);}
+  .bd-fill.r{background:linear-gradient(90deg,#F7B7A8,#E0553B);}
+  .bd-row .val{font-weight:800;white-space:nowrap;font-size:11.5px;}
+  .bd-trend{display:flex;align-items:flex-end;gap:10px;height:150px;padding:6px 2px 0;}
+  .bd-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:0;}
+  .bd-pair{display:flex;align-items:flex-end;gap:3px;height:118px;width:100%;justify-content:center;}
+  .bd-pair i{display:block;width:42%;max-width:22px;border-radius:6px 6px 0 0;min-height:2px;}
+  .bd-pair i.a{background:#5B3FD0;}.bd-pair i.b{background:#F2B417;}
+  .bd-col .lb{font-size:10px;color:var(--grey);margin-top:5px;font-weight:700;}
+  .bd-legend{display:flex;gap:12px;font-size:10.5px;color:var(--grey);font-weight:700;margin-top:8px;flex-wrap:wrap;}
+  .bd-legend b{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px;}
+  .bd-note{font-size:11px;color:var(--grey);line-height:1.6;background:#F7F6FD;border-radius:10px;padding:8px 10px;margin-bottom:12px;}
+  .bd-empty{text-align:center;color:var(--grey);font-size:12px;padding:16px 8px;}
 </style>
 <!-- Supabase 云端 SDK（未配置 key 时不影响运行，自动回退本地存储）-->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -704,7 +781,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="1102a";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="1104a";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -1792,7 +1869,7 @@ function auditLog(act,detail,oldv,newv){
 function can(p){return ROLES[curRole].can.includes(p);}
 // 作业中心(proc)只要拥有任一子作业权限即可进入；子页与页面级访问统一由 pageAllowed 判定
 function hasAnyOp(){return ['proc','transfer','waste','ent','stock'].some(p=>can(p));}
-function pageAllowed(p){if(p==='proc')return hasAnyOp();if(p==='monthly')return can('report');if(p==='opexm')return can('opex');if(p==='payrun')return can('payroll')&&canRunPayroll();if(p==='orderinv')return ['owner','hrmanager','area','manager','headchef'].includes(curRole);if(p==='accounting')return ['owner','hrmanager','area'].includes(curRole);if(typeof PROC_SUB!=='undefined'&&PROC_SUB[p])return can(PROC_SUB[p]);return can(p);}
+function pageAllowed(p){if(p==='proc')return hasAnyOp();if(p==='board')return can('report');if(p==='monthly')return can('report');if(p==='opexm')return can('opex');if(p==='payrun')return can('payroll')&&canRunPayroll();if(p==='orderinv')return ['owner','hrmanager','area','manager','headchef'].includes(curRole);if(p==='accounting')return ['owner','hrmanager','area'].includes(curRole);if(typeof PROC_SUB!=='undefined'&&PROC_SUB[p])return can(PROC_SUB[p]);return can(p);}
 function firstAllowedPage(){const order=['dash','attend','leave','payroll','hr','schedule','sales','inv','proc','ck','stock','opex','ap','bom','report','settings'];for(const p of order)if(pageAllowed(p))return p;return 'dash';}
 function canW(p){if(p==='payroll')return can(p)&&!isAgg()&&canRunPayroll();return can(p)&&!isAgg();} // 汇总视图为只读；薪资写入额外锁给 canRunPayroll (目前只有人事经理)
 /* 会计总账(accounting)：老板/区域副经理能看(pageAllowed已允许)但只读，只有人事经理能改——
@@ -1830,13 +1907,13 @@ function renderTop(){
 }
 // 侧边栏菜单分组（ERP 结构，方便日后扩充）
 const MENU=[
-  ["营运 Operations",[["dash","💰","dash"],["sales","🧾","sales"],["proc","🔄","proc"],["orderinv","🧾","orderinv"],["ck","🏭","ck"]]],
+  ["营运 Operations",[["board","📊","board"],["dash","💰","dash"],["sales","🧾","sales"],["proc","🔄","proc"],["orderinv","🧾","orderinv"],["ck","🏭","ck"]]],
   ["库存 Inventory",[["inv","📦","inv"],["bom","🍲","bom"],["monthend","📋","monthend"],["opexm","💵","opexm"]]],
   ["财务 Finance",[["ap","💳","ap"],["opex","💵","opex"],["monthly","📅","monthly"],["report","📈","report"],["accounting","📒","accounting"]]],
   ["人事 HR",[["hr","👤","hr"],["attend","🕐","attend"],["schedule","📅","schedule"],["leave","🌴","leave"],["payroll","💴","payroll"],["payrun","🧮","payrun"]]],
   ["系统 System",[["settings","⚙️","settings"]]],
 ];
-const MENU_LABELS={sales:{zh:"销售 (POS)",en:"Sales (POS)"},orderinv:{zh:"订单发票",en:"Order Invoices"},ck:{zh:"中央厨房",en:"Central Kitchen"},stock:{zh:"盘点",en:"Stock Take"},hr:{zh:"员工档案",en:"Staff Profiles"},attend:{zh:"打卡考勤",en:"Attendance"},schedule:{zh:"排班",en:"Schedule"},leave:{zh:"请假",en:"Leave"},monthly:{zh:"月度核算",en:"Monthly Cost"},bom:{zh:"配方成本",en:"Recipe Cost"},opexm:{zh:"运营开销录入",en:"OpEx Entry"},monthend:{zh:"月末盘点",en:"Month-End Count"},payrun:{zh:"薪资发放 Payroll",en:"Payroll Run"},accounting:{zh:"会计总账",en:"Accounting"}};
+const MENU_LABELS={board:{zh:"数据看板",en:"Dashboard"},sales:{zh:"销售 (POS)",en:"Sales (POS)"},orderinv:{zh:"订单发票",en:"Order Invoices"},ck:{zh:"中央厨房",en:"Central Kitchen"},stock:{zh:"盘点",en:"Stock Take"},hr:{zh:"员工档案",en:"Staff Profiles"},attend:{zh:"打卡考勤",en:"Attendance"},schedule:{zh:"排班",en:"Schedule"},leave:{zh:"请假",en:"Leave"},monthly:{zh:"月度核算",en:"Monthly Cost"},bom:{zh:"配方成本",en:"Recipe Cost"},opexm:{zh:"运营开销录入",en:"OpEx Entry"},monthend:{zh:"月末盘点",en:"Month-End Count"},payrun:{zh:"薪资发放 Payroll",en:"Payroll Run"},accounting:{zh:"会计总账",en:"Accounting"}};
 function mlabel(p){if(MENU_LABELS[p])return MENU_LABELS[p][LANG];return t(p);}
 function renderSidebar(){
   const html=MENU.map(([grp,items])=>{
@@ -3761,10 +3838,115 @@ function versionSection(){
     <div class="mini" style="margin-top:6px;">${LANG==="zh"?"系统每隔几分钟、或从背景切回前台时会自动检查新版本；侦测到时所有账号都会响铃+跳出强制更新窗，必须按确认更新才能继续使用。":"Auto-checks every few minutes and on resume; when found, all accounts get a chime + forced update prompt."}</div>
     <button class="btn ghost sm" style="margin-top:8px;" onclick="checkForUpdate(true)">🔄 ${LANG==="zh"?"手动检查更新":"Check now"}</button>`);
 }
+/* ================= 外观主题切换（只影响这台设备的显示，不碰数据）================= */
+function themeNow(){try{return localStorage.getItem('bhTheme')==='classic'?'classic':'sp';}catch(e){return 'sp';}}
+function setTheme(v){try{localStorage.setItem('bhTheme',v);}catch(e){}document.documentElement.classList.toggle('sp',v!=='classic');render();}
+function themeSection(){const zh=LANG==="zh";const cur=themeNow();
+  return `<div class="card" style="padding:12px;margin-bottom:12px;">
+    <div class="fr"><label>🎨 ${zh?"外观风格":"Appearance"}</label>
+    <div class="seg"><button class="${cur==='sp'?'active':''}" onclick="setTheme('sp')">${zh?"清爽新风格":"Fresh"}</button><button class="${cur==='classic'?'active':''}" onclick="setTheme('classic')">${zh?"经典":"Classic"}</button></div>
+    <div class="mini" style="margin-top:6px;">${zh?"只改变这台手机/电脑看到的样子，不影响任何数据和计算；每个人可以自己选。":"Display only; no data or formulas change."}</div></div></div>`;}
+
+/* ================= 数据看板（只读）=================
+   ⚠️ 只读取已有数据、完全不写入、不改任何公式：
+   · 实际食材成本 = 月初库存 + 本月进货 − 月末库存（跟「月度核算」入账用的同一条成本算货法）
+   · 理论成本 = 「配方成本」菜品成本 × 当月销量（只含已建配方的单点菜，自助餐主体不含）
+   · 其余（进货/报废/招待/库存）都是把现有记录按月份、供应商、品项加总。 */
+let boardTab='ov', boardMonth=TODAY.slice(0,7);
+function setBoardTab(t){boardTab=t;render();}
+function setBoardMonth(m){boardMonth=m;render();}
+function bdMonths(end,n){const a=[end];let m=end;for(let i=1;i<n;i++){m=prevMonthKey(m);a.unshift(m);}return a;}
+function bdShort(m){const p=m.split('-');return LANG==="zh"?((+p[1])+'月'):(p[1]+'/'+p[0].slice(2));}
+function bdData(m){
+  const x=d();let rev=0,theo=0,opex=0;
+  try{const mp=monthlyPnL(m);rev=mp.rev||0;theo=mp.cogs||0;opex=mp.opex||0;}catch(e){}
+  const pur=monthPurchasesFor(m);
+  const hasClose=(x.monthEnd||[]).some(r=>String(r.date||'').slice(0,7)===m);
+  const open=monthEndTotal(prevMonthKey(m)),close=monthEndTotal(m);
+  const actual=hasClose?Math.max(0,open+pur-close):null;
+  const inM=r=>String(r.date||'').slice(0,7)===m;
+  const waste=(x.wasteLog||[]).filter(inM).reduce((s,r)=>s+(+r.cost||0)*(+r.qty||0),0);
+  const offer=(x.offers||[]).filter(inM).reduce((s,r)=>s+(+r.total||0),0);
+  return {rev,theo,opex,pur,open,close,hasClose,actual,waste,offer};
+}
+function bdKpi(icon,title,val,sub,cls){return `<div class="bd-kpi"><div><div class="t">${title}</div><div class="v">${val}</div>${sub?`<div class="s ${cls||''}">${sub}</div>`:''}</div><div class="bd-ic">${icon}</div></div>`;}
+function bdBars(rows,cls){const zh=LANG==="zh";
+  if(!rows.length)return `<div class="bd-empty">${zh?"这个月还没有记录":"No records this month"}</div>`;
+  const max=Math.max(1e-9,...rows.map(r=>r.v));
+  return rows.map(r=>`<div class="bd-row"><div class="nm" title="${oEsc(r.n)}">${oEsc(r.n)}</div><div class="bd-track"><div class="bd-fill ${cls||''}" style="width:${Math.max(3,r.v/max*100).toFixed(1)}%"></div></div><div class="val">${r.t}</div></div>`).join('');}
+function bdTrend(months,aArr,bArr,aLb,bLb){
+  const max=Math.max(1e-9,...aArr,...(bArr||[]));
+  const col=(m,i)=>`<div class="bd-col"><div class="bd-pair"><i class="a" title="${aLb} ${money(aArr[i])}" style="height:${(aArr[i]/max*100).toFixed(1)}%"></i>${bArr?`<i class="b" title="${bLb} ${money(bArr[i])}" style="height:${(bArr[i]/max*100).toFixed(1)}%"></i>`:''}</div><div class="lb">${bdShort(m)}</div></div>`;
+  return `<div class="bd-trend">${months.map(col).join('')}</div><div class="bd-legend"><span><b style="background:#5B3FD0"></b>${aLb}</span>${bArr?`<span><b style="background:#F2B417"></b>${bLb}</span>`:''}</div>`;}
+function pgBoard(){
+  const zh=LANG==="zh";const x=d();
+  if(isAgg())return `<h2 class="h" style="margin-top:2px;">📊 ${zh?"数据看板":"Dashboard"}</h2><div class="hint">${zh?"请先在右上角切换到某一间分店再查看看板。":"Switch to one branch first."}</div>`;
+  const m=boardMonth;const D=bdData(m);const months6=bdMonths(m,6);const D6=months6.map(bdData);
+  const ml=[...new Set([...(typeof availMonths==='function'?availMonths():[]),m,TODAY.slice(0,7)])].sort().reverse();
+  const tabs=[['ov',zh?'总览':'Overview'],['pur',zh?'采购':'Procurement'],['waste',zh?'损耗':'Wastage'],['inv',zh?'库存':'Inventory'],['act',zh?'实际成本':'Actual Cost']];
+  const bar=`<div class="bd-bar"><select onchange="setBoardMonth(this.value)">${ml.map(k=>`<option value="${k}" ${k===m?'selected':''}>${monthLabel2(k)}</option>`).join('')}</select><span class="mini">${oEsc(nm(outletObj()))}</span></div>`;
+  const head=`<h2 class="h" style="margin-top:2px;">📊 ${zh?"数据看板":"Dashboard"} <span class="tag">v${BUILD}</span></h2>
+    <div class="bd-tabs">${tabs.map(([k,l])=>`<button class="${boardTab===k?'on':''}" onclick="setBoardTab('${k}')">${l}</button>`).join('')}</div>${bar}`;
+  const pct=(a,b)=>b>0?(a/b*100).toFixed(1)+'%':'—';
+  let body='';
+  if(boardTab==='ov'){
+    const cp=(D.actual!=null&&D.rev>0)?D.actual/D.rev*100:null;
+    body=`<div class="bd-kpis">
+      ${bdKpi('💵',zh?'营业额':'Revenue',D.rev>0?money(D.rev):'—',D.rev>0?'':(zh?'销售数据未录入':'no sales'),'mut')}
+      ${bdKpi('🥩',zh?'实际食材成本':'Actual Cost',D.actual!=null?money(D.actual):'—',cp!=null?(zh?'占营业额 ':'of revenue ')+cp.toFixed(1)+'%':(zh?'月末盘点未填':'no month-end count'),cp==null?'mut':(cp>38?'bad':''))}
+      ${bdKpi('🧮',zh?'理论成本(配方)':'Theoretical',D.theo>0?money(D.theo):'—',zh?'只含有配方的单点菜':'recipe dishes only','mut')}
+      ${bdKpi('🗑️',zh?'报废损耗':'Wastage',money(D.waste),D.rev>0?(zh?'占营业额 ':'')+pct(D.waste,D.rev):'', D.waste>0?'bad':'mut')}
+      ${bdKpi('🎁',zh?'招待赠送':'Offers',money(D.offer),'','mut')}
+      ${bdKpi('🏠',zh?'运营开销':'OpEx',money(D.opex),'','mut')}
+    </div>
+    <div class="bd-card"><h3>${zh?'近 6 个月：营业额 vs 实际食材成本':'Last 6 months: Revenue vs Actual Cost'}</h3><div class="sub2">${zh?'没有月末盘点的月份，实际成本显示为 0':'Months without month-end count show 0'}</div>${bdTrend(months6,D6.map(r=>r.rev),D6.map(r=>r.actual||0),zh?'营业额':'Revenue',zh?'实际成本':'Actual')}</div>`;
+  }else if(boardTab==='pur'){
+    const bySup={};(x.purchases||[]).filter(r=>String(r.date||'').slice(0,7)===m).forEach(r=>{const s=r.supplier||(zh?'未分类':'Other');bySup[s]=(bySup[s]||0)+(+r.price||0);});
+    const rows=Object.entries(bySup).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([n,v])=>({n,v,t:money(v)}));
+    body=`<div class="bd-kpis">${bdKpi('🛒',zh?'本月进货':'Purchases',money(D.pur),'','mut')}${bdKpi('🏢',zh?'供应商数':'Suppliers',String(Object.keys(bySup).length),'','mut')}${bdKpi('📦',zh?'进货占营业额':'% of revenue',pct(D.pur,D.rev),'','mut')}</div>
+    <div class="bd-card"><h3>${zh?'各供应商进货金额':'Purchases by supplier'}</h3><div class="sub2">${monthLabel2(m)}</div>${bdBars(rows)}</div>
+    <div class="bd-card"><h3>${zh?'近 6 个月进货':'Purchases, last 6 months'}</h3>${bdTrend(months6,D6.map(r=>r.pur),null,zh?'进货':'Purchases')}</div>`;
+  }else if(boardTab==='waste'){
+    const wl=(x.wasteLog||[]).filter(r=>String(r.date||'').slice(0,7)===m);
+    const byItem={},byReason={};wl.forEach(r=>{const a=(+r.cost||0)*(+r.qty||0);const it=r.item||'—';byItem[it]=(byItem[it]||0)+a;const rs=r.reason||(zh?'未填原因':'—');byReason[rs]=(byReason[rs]||0)+a;});
+    const top=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([n,v])=>({n,v,t:money(v)}));
+    body=`<div class="bd-kpis">${bdKpi('🗑️',zh?'报废损耗':'Wastage',money(D.waste),D.rev>0?pct(D.waste,D.rev)+(zh?' 占营业额':''):'',D.waste>0?'bad':'mut')}${bdKpi('🎁',zh?'招待赠送':'Offers',money(D.offer),'','mut')}${bdKpi('📝',zh?'报废笔数':'Records',String(wl.length),'','mut')}</div>
+    <div class="bd-card"><h3>${zh?'报废最多的品项':'Top wasted items'}</h3><div class="sub2">${monthLabel2(m)}</div>${bdBars(top(byItem),'r')}</div>
+    <div class="bd-card"><h3>${zh?'按原因':'By reason'}</h3>${bdBars(top(byReason),'y')}</div>
+    <div class="bd-card"><h3>${zh?'近 6 个月报废':'Wastage, last 6 months'}</h3>${bdTrend(months6,D6.map(r=>r.waste),null,zh?'报废':'Wastage')}</div>`;
+  }else if(boardTab==='inv'){
+    const items=x.items||[];const val=items.reduce((s,i)=>s+(+i.qty||0)*(+i.cost||0),0);
+    const low=items.filter(i=>(+i.par||0)>0&&(+i.qty||0)<=(+i.par||0));
+    const bySup={};items.forEach(i=>{const s=itemSupplier(i.name);bySup[s]=(bySup[s]||0)+(+i.qty||0)*(+i.cost||0);});
+    const rows=Object.entries(bySup).filter(e=>e[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([n,v])=>({n,v,t:money(v)}));
+    const lowRows=low.slice().sort((a,b)=>(a.qty/(a.par||1))-(b.qty/(b.par||1))).slice(0,8).map(i=>({n:i.name,v:Math.max(.02,(+i.qty||0)/(+i.par||1)),t:num(i.qty,1)+' / '+num(i.par,1)}));
+    body=`<div class="bd-kpis">${bdKpi('📦',zh?'库存总值':'Stock value',money(val),'','mut')}${bdKpi('🏷️',zh?'品项数':'Items',String(items.length),'','mut')}${bdKpi('⚠️',zh?'低于安全库存':'Below par',String(low.length),'',low.length?'bad':'mut')}</div>
+    <div class="bd-card"><h3>${zh?'各供应商库存值':'Stock value by supplier'}</h3>${bdBars(rows)}</div>
+    <div class="bd-card"><h3>${zh?'最需要补货（现有 / 安全库存）':'Needs restock (on hand / par)'}</h3>${bdBars(lowRows,'r')}</div>`;
+  }else{
+    const diff=(D.actual!=null&&D.theo>0)?D.actual-D.theo:null;
+    body=`<div class="bd-kpis k4">
+      ${bdKpi('💵',zh?'营业额':'Revenue',D.rev>0?money(D.rev):'—','','mut')}
+      ${bdKpi('🥩',zh?'实际成本':'Actual',D.actual!=null?money(D.actual):'—',(D.actual!=null&&D.rev>0)?pct(D.actual,D.rev)+(zh?' 占营业额':''):(zh?'月末盘点未填':'no count'),'mut')}
+      ${bdKpi('🧮',zh?'理论成本':'Theoretical',D.theo>0?money(D.theo):'—','','mut')}
+      ${bdKpi('⚖️',zh?'实际 − 理论':'Actual − Theo',diff!=null?money(diff):'—',diff!=null?(diff>0?(zh?'实际高于理论':'over'):(zh?'实际不高于理论':'ok')):'',diff!=null&&diff>0?'bad':'mut')}
+    </div>
+    <div class="bd-card"><h3>${zh?'实际成本怎么算（成本算货法）':'How actual cost is computed'}</h3><div class="sub2">${monthLabel2(m)}</div>
+      <div class="bd-row" style="grid-template-columns:1fr auto;"><div class="nm">${zh?'月初库存（上月月末盘点）':'Opening stock'}</div><div class="val">${money(D.open)}</div></div>
+      <div class="bd-row" style="grid-template-columns:1fr auto;"><div class="nm">＋ ${zh?'本月进货':'Purchases'}</div><div class="val">${money(D.pur)}</div></div>
+      <div class="bd-row" style="grid-template-columns:1fr auto;"><div class="nm">－ ${zh?'月末库存（本月月末盘点）':'Closing stock'}</div><div class="val">${D.hasClose?money(D.close):'—'}</div></div>
+      <div class="bd-row" style="grid-template-columns:1fr auto;border-top:1px solid var(--line);padding-top:8px;"><div class="nm">＝ ${zh?'实际食材成本':'Actual cost'}</div><div class="val" style="font-size:14px;">${D.actual!=null?money(D.actual):'—'}</div></div></div>
+    <div class="bd-card"><h3>${zh?'近 6 个月：实际成本 vs 理论成本':'Actual vs Theoretical'}</h3>${bdTrend(months6,D6.map(r=>r.actual||0),D6.map(r=>r.theo),zh?'实际':'Actual',zh?'理论':'Theoretical')}</div>
+    <div class="bd-note">${zh?'ℹ️ 理论成本只包含「配方成本」里已建配方的单点菜；自助餐主体不逐道做配方，所以实际成本通常会比理论成本高，这是正常的。看板只是把现有数据整理成图，所有数字和「月度核算」「会计总账」用的是同一套算法。':'Theoretical covers recipe dishes only. Numbers use the same formulas as Monthly Costing & the ledger.'}</div>`;
+  }
+  return head+body;
+}
+
 function pgSettings(){
   const x=d();
   return `<h2 class="h" style="margin-top:2px;">⚙️ ${LANG==="zh"?"系统设置":"Settings"}</h2>
   ${versionSection()}
+  ${themeSection()}
   <div class="card" style="padding:12px;margin-bottom:12px;">
     <div class="fr"><label>${LANG==="zh"?"当前角色权限 (RBAC)":"Role Permissions"}</label>
     <div class="mini">${Object.entries(ROLES).map(([k,v])=>`<div style="padding:4px 0;">${k===curRole?'▶ ':''}<b>${LANG==="zh"?v.name:v.en}</b>：${v.can.length} ${LANG==="zh"?"个模块":"modules"}</div>`).join('')}</div></div>
@@ -5137,7 +5319,7 @@ function pgPayrun(){
 }
 
 /* 页面路由补充（ap/opex 不在底部tab，用函数导航） */
-const _pages={dash:pgDash,sales:pgSales,inv:pgInv,proc:pgProc,bom:pgBom,report:pgReport,settings:pgSettings,ap:pgAp,opex:pgOpex,opexm:pgOpexM,payroll:pgPayroll,payrun:pgPayrun,hr:pgHR,attend:pgAttend,schedule:pgSchedule,leave:pgLeave,ck:pgCK,stock:pgStock,
+const _pages={board:pgBoard,dash:pgDash,sales:pgSales,inv:pgInv,proc:pgProc,bom:pgBom,report:pgReport,settings:pgSettings,ap:pgAp,opex:pgOpex,opexm:pgOpexM,payroll:pgPayroll,payrun:pgPayrun,hr:pgHR,attend:pgAttend,schedule:pgSchedule,leave:pgLeave,ck:pgCK,stock:pgStock,
   purchase:pgPurchase,grn:pgGRN,transfer:pgTransfer,waste2:pgWaste2,offer:pgOffer,opexlog:pgOpexLog,monthend:pgMonthEnd,monthly:pgMonthly,ordersheet:pgOrderSheet,orderinv:pgOrderInv,accounting:pgAccounting};
 /* ================= 通用「拖动排序」☰（触屏+鼠标，无需库）=================
    用法：容器加 data-sort="<类型>" (+ data-* 上下文)，子行加 data-sortid 与一个 .draghandle。
