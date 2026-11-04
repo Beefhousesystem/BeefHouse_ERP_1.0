@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-<script>try{if(localStorage.getItem('bhTheme')!=='classic')document.documentElement.classList.add('sp');}catch(e){document.documentElement.classList.add('sp');}</script>
+<script>try{var _t=localStorage.getItem('bhTheme');if(_t==='classic'){}else if(_t==='sp')document.documentElement.classList.add('sp');else document.documentElement.classList.add('mech');}catch(e){document.documentElement.classList.add('mech');}</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -407,9 +407,71 @@
   .bd-pair i.a{background:#5B3FD0;}.bd-pair i.b{background:#F2B417;}
   .bd-col .lb{font-size:10px;color:var(--grey);margin-top:5px;font-weight:700;}
   .bd-legend{display:flex;gap:12px;font-size:10.5px;color:var(--grey);font-weight:700;margin-top:8px;flex-wrap:wrap;}
+  .bd-legend b.la{background:#5B3FD0;}.bd-legend b.lb2{background:#F2B417;}
+  html.mech .bd-legend b.la{background:#2B3440;}html.mech .bd-legend b.lb2{background:#FF6A13;}
   .bd-legend b{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px;}
   .bd-note{font-size:11px;color:var(--grey);line-height:1.6;background:#F7F6FD;border-radius:10px;padding:8px 10px;margin-bottom:12px;}
   .bd-empty{text-align:center;color:var(--grey);font-size:12px;padding:16px 8px;}
+  /* ===== 外观主题「现代机械风」(2026-11-04)：石墨深色顶栏/侧栏 + 钢灰底 + 安全橙点缀 + 直角/细线/等宽数字。
+     同样只改颜色、圆角、字体，不动版面宽度与数据；html.mech 开关，设置页可切「清爽/经典」。 ===== */
+  html.mech{
+    --ink:#161A20;--ink2:#3A424D;--paper:#E8EBEE;--card:#FFFFFF;--line:#C9CFD6;
+    --brand:#161A20;--brand2:#FF6A13;--gold:#FF6A13;--soft:#EEF0F3;--grey:#69727E;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Roboto Mono",monospace;
+  }
+  html.mech body{background:var(--paper);font-variant-numeric:tabular-nums;}
+  html.mech .top{background:#14171C;color:#fff;border-bottom:2px solid #FF6A13;box-shadow:none;}
+  html.mech .top h1{color:#fff;}
+  html.mech .sel{background:rgba(255,255,255,.07);color:#fff;border:1px solid #39414C;border-radius:3px;}
+  html.mech .lang{color:#fff;border-color:#39414C;background:rgba(255,255,255,.04);border-radius:3px;}
+  html.mech .role-chip{background:#FF6A13;color:#14171C;border-radius:3px;}
+  html.mech #outletBadge{background:#FF6A13!important;color:#14171C!important;border-radius:3px!important;}
+  html.mech .side{background:#1A1E25;color:#AEB6C2;border-right:1px solid #0E1115;}
+  html.mech .side .grp{color:#6F7987;font-family:var(--mono);letter-spacing:.08em;}
+  html.mech .side button{color:#AEB6C2;border-radius:0;}
+  html.mech .side button:hover{background:#232830;color:#fff;}
+  html.mech .side button.active{background:#262B33;color:#fff;border-left-color:#FF6A13;}
+  html.mech .card,html.mech .kpi,html.mech .pl{border:1px solid var(--line);border-radius:4px;box-shadow:0 1px 0 rgba(20,23,28,.06);}
+  html.mech .kpi{border-left:3px solid #FF6A13;}
+  html.mech .kpi .k{text-transform:uppercase;letter-spacing:.05em;font-size:10px;}
+  html.mech .kpi .v{font-family:var(--mono);letter-spacing:-.02em;}
+  html.mech .h{color:var(--ink);text-transform:none;border-left:3px solid #FF6A13;padding-left:8px;}
+  html.mech .h .tag{background:#E1E5E9;color:var(--ink2);border-radius:3px;font-family:var(--mono);}
+  html.mech .btn{background:#161A20;color:#fff;border-radius:3px;border:1px solid #161A20;letter-spacing:.02em;}
+  html.mech .btn.brand{background:#161A20;}
+  html.mech .btn.gold{background:#FF6A13;color:#14171C;border-color:#FF6A13;}
+  html.mech .btn.ghost{background:#fff;color:#161A20;border:1px solid #9AA3AE;}
+  html.mech .seg{background:#DDE1E6;border-radius:3px;padding:2px;}
+  html.mech .seg button{border-radius:2px;}
+  html.mech .seg button.active{background:#161A20;color:#fff;box-shadow:none;}
+  html.mech th{background:#DEE2E7;color:var(--ink2);border-bottom:1px solid #9AA3AE;letter-spacing:.05em;}
+  html.mech td{border-bottom-color:#E4E7EB;}
+  html.mech .hint{background:#E4E8EC;color:var(--ink2);border-radius:3px;border-left:3px solid #FF6A13;}
+  html.mech input,html.mech select,html.mech textarea{border-radius:3px;}
+  html.mech input:focus,html.mech select:focus,html.mech textarea:focus{outline:2px solid #FF6A13;outline-offset:-1px;}
+  html.mech .pill{border-radius:3px;}
+  html.mech .pill.p-b{background:#E0E5EA;color:#2B3440;}
+  html.mech .pl .row.tot{border-top-color:#161A20;}
+  /* 数据看板：机械风配色 */
+  html.mech .bd-tabs{border-bottom:1px solid #9AA3AE;}
+  html.mech .bd-tabs button{color:var(--grey);border-radius:0;font-family:var(--mono);font-size:12px;letter-spacing:.02em;}
+  html.mech .bd-tabs button.on{color:#161A20;border-bottom-color:#FF6A13;}
+  html.mech .bd-bar select{border-radius:3px;color:#161A20;border:1px solid #9AA3AE;font-family:var(--mono);}
+  html.mech .bd-kpi,html.mech .bd-card{border-radius:4px;box-shadow:0 1px 0 rgba(20,23,28,.06);}
+  html.mech .bd-kpi{border-left:3px solid #FF6A13;}
+  html.mech .bd-kpi .t{text-transform:uppercase;letter-spacing:.05em;font-size:10px;}
+  html.mech .bd-kpi .v,html.mech .bd-row .val{font-family:var(--mono);letter-spacing:-.02em;}
+  html.mech .bd-kpi .s{color:#168A5B;}html.mech .bd-kpi .s.bad{color:#D64520;}html.mech .bd-kpi .s.mut{color:var(--grey);}
+  html.mech .bd-ic{background:#161A20;border-radius:3px;color:#fff;filter:grayscale(1) brightness(1.6);}
+  html.mech .bd-track{background:#E1E5E9;border-radius:1px;height:10px;}
+  html.mech .bd-fill{border-radius:1px;background:repeating-linear-gradient(90deg,#2B3440 0 6px,#3C4755 6px 8px);}
+  html.mech .bd-fill.y{background:repeating-linear-gradient(90deg,#FF6A13 0 6px,#E85D0A 6px 8px);}
+  html.mech .bd-fill.r{background:repeating-linear-gradient(90deg,#D64520 0 6px,#B93A1A 6px 8px);}
+  html.mech .bd-pair i{border-radius:1px 1px 0 0;}
+  html.mech .bd-pair i.a{background:#2B3440;}html.mech .bd-pair i.b{background:#FF6A13;}
+  html.mech .bd-legend b{border-radius:1px;}
+  html.mech .bd-note{background:#E4E8EC;border-radius:3px;border-left:3px solid #9AA3AE;}
+  html.mech .bd-card h3{text-transform:none;border-left:3px solid #161A20;padding-left:7px;}
 </style>
 <!-- Supabase 云端 SDK（未配置 key 时不影响运行，自动回退本地存储）-->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -781,7 +843,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="1104a";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="1104b";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -1999,8 +2061,8 @@ function pgDash(){
   const f=calcFin();const o=outletObj();
   const rangeLabel={day:"日均",week:"每周",month:"每月"};
   const compare=OUTLETS.filter(o=>!o.ck).filter(o=>ROLES[curRole].allBranch||o.id===curOutlet).map(ob=>{
-    const net=outletRevenue(ob.id)/1.06;const np=net*0.1*(0.6+Math.random());
-    return {name:nm(ob),net,np};
+    const net=outletRevenue(ob.id)/1.06;
+    return {name:nm(ob),net};
   });
   return `
   <div class="fb"><h2 class="h" style="margin:0;">💰 ${nm(o)} · ${LANG==="zh"?"利润大盘":"P&L Dashboard"}</h2>
@@ -2069,8 +2131,8 @@ function pgDash(){
   </div>
 
   <h2 class="h">🏪 ${LANG==="zh"?"各分店对比":"Branch Comparison"}</h2>
-  <div class="card tbl"><table><thead><tr><th>${LANG==="zh"?"分店":"Branch"}</th><th>${LANG==="zh"?"净营业额":"Net Sales"}</th><th>${LANG==="zh"?"估算净利":"Est. Profit"}</th></tr></thead><tbody>
-    ${compare.map(c=>`<tr><td>${c.name}</td><td>${money(c.net)}</td><td class="${c.np>=0?'pos':'neg'}">${money(c.np)}</td></tr>`).join('')}
+  <div class="card tbl"><table><thead><tr><th>${LANG==="zh"?"分店":"Branch"}</th><th>${LANG==="zh"?"净营业额":"Net Sales"}</th></tr></thead><tbody>
+    ${compare.map(c=>`<tr><td>${c.name}</td><td>${money(c.net)}</td></tr>`).join('')}
   </tbody></table></div>
   `;
 }
@@ -3839,12 +3901,12 @@ function versionSection(){
     <button class="btn ghost sm" style="margin-top:8px;" onclick="checkForUpdate(true)">🔄 ${LANG==="zh"?"手动检查更新":"Check now"}</button>`);
 }
 /* ================= 外观主题切换（只影响这台设备的显示，不碰数据）================= */
-function themeNow(){try{return localStorage.getItem('bhTheme')==='classic'?'classic':'sp';}catch(e){return 'sp';}}
-function setTheme(v){try{localStorage.setItem('bhTheme',v);}catch(e){}document.documentElement.classList.toggle('sp',v!=='classic');render();}
+function themeNow(){try{const t=localStorage.getItem('bhTheme');return t==='classic'||t==='sp'?t:'mech';}catch(e){return 'mech';}}
+function setTheme(v){try{localStorage.setItem('bhTheme',v);}catch(e){}const c=document.documentElement.classList;c.toggle('sp',v==='sp');c.toggle('mech',v==='mech');render();}
 function themeSection(){const zh=LANG==="zh";const cur=themeNow();
   return `<div class="card" style="padding:12px;margin-bottom:12px;">
     <div class="fr"><label>🎨 ${zh?"外观风格":"Appearance"}</label>
-    <div class="seg"><button class="${cur==='sp'?'active':''}" onclick="setTheme('sp')">${zh?"清爽新风格":"Fresh"}</button><button class="${cur==='classic'?'active':''}" onclick="setTheme('classic')">${zh?"经典":"Classic"}</button></div>
+    <div class="seg"><button class="${cur==='mech'?'active':''}" onclick="setTheme('mech')">${zh?"现代机械风":"Mechanical"}</button><button class="${cur==='sp'?'active':''}" onclick="setTheme('sp')">${zh?"清爽淡紫":"Fresh"}</button><button class="${cur==='classic'?'active':''}" onclick="setTheme('classic')">${zh?"经典":"Classic"}</button></div>
     <div class="mini" style="margin-top:6px;">${zh?"只改变这台手机/电脑看到的样子，不影响任何数据和计算；每个人可以自己选。":"Display only; no data or formulas change."}</div></div></div>`;}
 
 /* ================= 数据看板（只读）=================
@@ -3877,7 +3939,7 @@ function bdBars(rows,cls){const zh=LANG==="zh";
 function bdTrend(months,aArr,bArr,aLb,bLb){
   const max=Math.max(1e-9,...aArr,...(bArr||[]));
   const col=(m,i)=>`<div class="bd-col"><div class="bd-pair"><i class="a" title="${aLb} ${money(aArr[i])}" style="height:${(aArr[i]/max*100).toFixed(1)}%"></i>${bArr?`<i class="b" title="${bLb} ${money(bArr[i])}" style="height:${(bArr[i]/max*100).toFixed(1)}%"></i>`:''}</div><div class="lb">${bdShort(m)}</div></div>`;
-  return `<div class="bd-trend">${months.map(col).join('')}</div><div class="bd-legend"><span><b style="background:#5B3FD0"></b>${aLb}</span>${bArr?`<span><b style="background:#F2B417"></b>${bLb}</span>`:''}</div>`;}
+  return `<div class="bd-trend">${months.map(col).join('')}</div><div class="bd-legend"><span><b class="la"></b>${aLb}</span>${bArr?`<span><b class="lb2"></b>${bLb}</span>`:''}</div>`;}
 function pgBoard(){
   const zh=LANG==="zh";const x=d();
   if(isAgg())return `<h2 class="h" style="margin-top:2px;">📊 ${zh?"数据看板":"Dashboard"}</h2><div class="hint">${zh?"请先在右上角切换到某一间分店再查看看板。":"Switch to one branch first."}</div>`;
