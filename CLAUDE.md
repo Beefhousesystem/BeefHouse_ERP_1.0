@@ -875,3 +875,8 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 - 业主要求风格偏「现代机械风」：新增 `html.mech` 主题——石墨深色顶栏/侧栏（顶栏底部一条橙色细线）、钢灰底、安全橙点缀、直角(3-4px)、细线边框、等宽数字(KPI/金额)、条纹质感的横条图。数据看板里的柱状图/图例也有对应配色。
 - 主题现在有三种，设置页「🎨 外观风格」切换：**现代机械风（默认）/ 清爽淡紫 / 经典**；`localStorage bhTheme` 存 `mech`/`sp`/`classic`（没存过=机械风）。`<head>` 最前面的小脚本提前套 class 避免闪烁。三种风格都只改颜色/圆角/字体，不动版面宽度（已确认手机进货单的冻结品名栏仍是 `position:sticky`）。
 - 复制给明记：同上，CSS 主题段可直接搬。
+
+## 防止 Supabase 免费版被暂停（2026-11-13）
+- 起因：业主收到 Supabase「项目将被暂停」的提醒。免费版项目约一周没有任何访问就会被暂停；只要有定期的数据库请求就不会。
+- 做法：新增 `.github/workflows/supabase-keepalive.yml`——GitHub Actions 每 3 天向牛室 Supabase 发一次只读请求（`erp_users?select=email&limit=1`，匿名读不到资料，回 `[]` 即正常）；用的是 `index.html` 里本来就公开的网址和 publishable key，没有任何密钥。也可在 GitHub → Actions 手动 Run workflow。回应不是 2xx 时这次运行会标红（GitHub 会寄邮件），提示项目可能已被暂停。
+- 要注意：①GitHub 对**太久没有任何提交的仓库**会自动停掉定时任务（约 60 天），本仓库一直有更新所以没事；②已经被暂停的项目要到 Supabase 后台手动 Restore，这个定时任务救不了已暂停的；③明记的 Supabase 项目（`kmcdokwiyetlmsrdlgqw`）要在明记仓库里加同样的 workflow（换成明记的网址和 key），由明记 ERP 的对话处理。
