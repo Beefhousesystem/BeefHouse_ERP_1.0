@@ -880,3 +880,12 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 - 起因：业主收到 Supabase「项目将被暂停」的提醒。免费版项目约一周没有任何访问就会被暂停；只要有定期的数据库请求就不会。
 - 做法：新增 `.github/workflows/supabase-keepalive.yml`——GitHub Actions 每 3 天向牛室 Supabase 发一次只读请求（`erp_users?select=email&limit=1`，匿名读不到资料，回 `[]` 即正常）；用的是 `index.html` 里本来就公开的网址和 publishable key，没有任何密钥。也可在 GitHub → Actions 手动 Run workflow。回应不是 2xx 时这次运行会标红（GitHub 会寄邮件），提示项目可能已被暂停。
 - 要注意：①GitHub 对**太久没有任何提交的仓库**会自动停掉定时任务（约 60 天），本仓库一直有更新所以没事；②已经被暂停的项目要到 Supabase 后台手动 Restore，这个定时任务救不了已暂停的；③明记的 Supabase 项目（`kmcdokwiyetlmsrdlgqw`）要在明记仓库里加同样的 workflow（换成明记的网址和 key），由明记 ERP 的对话处理。
+
+## 自动备份 Supabase 数据（2026-11-23）
+- 起因：Supabase 免费版后台显示 `Last backup: No backups`（没有每日备份），而这套系统存着薪资和会计总账。业主要求做定期自动备份（不升级 Pro）。
+- 做法：`.github/workflows/supabase-backup.yml` 每天（UTC 20:23）跑 `scripts/backup-supabase.sh`，用 REST API 导出 `erp_store`（每行 `key`+`value`，**全部业务/薪资数据都在这里**）和 `erp_users`，打包成 JSON，再用 `BACKUP_PASSPHRASE` 以 gpg AES256 加密成 `.json.gpg`，上传为 GitHub Artifact，保留 90 天（组织上限 90 天）。`erp_store` 若导出 0 行会直接让运行变红，不存空备份。
+- **⚠️ 公开仓库的底线**：备份绝不能明文上传/提交（公开仓库的 Artifact 别人也能下载）；密钥 `SUPABASE_SERVICE_KEY` 和口令 `BACKUP_PASSPHRASE` 只放 GitHub Secrets。
+- **业主要做的一次性设置**：在 GitHub Secrets 加这两个，再手动 Run workflow 一次并下载解密验证（步骤见 `BACKUP.md`）。**设置完之前这个工作流会因缺 Secrets 而变红，是预期的。**
+- 脚本已用本地模拟的 PostgREST 测过：分页、加密/解密、错误口令解不开、密钥错/空库会失败、缺 Secrets 会提示。**还没对真实 Supabase 跑过**（本环境连不上），第一次手动运行要业主确认。
+- 没备份到的：Storage 文件、`auth.users`。恢复脚本还没写（业主需要时再做，先小范围试）。
+- 复制给明记：明记 Supabase 项目同样需要（换网址、两个 Secrets；`erp_store`/`erp_users` 表结构相同，另外还有官网的 `web_*` 表要不要一起备份要问业主）。

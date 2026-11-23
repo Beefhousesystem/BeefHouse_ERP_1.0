@@ -1,0 +1,33 @@
+# 每天自动备份牛室 Supabase 的数据（erp_store + erp_users），加密后存成 GitHub 的「Artifact」，保留 90 天。
+# ⚠️ 本仓库是公开的：备份一定要加密才上传（脚本已经做了），口令只放在 Secrets 里，绝不写进仓库。
+# 需要两个 Secrets（GitHub → Settings → Secrets and variables → Actions）：
+#   SUPABASE_SERVICE_KEY  Supabase 的 secret/service_role 密钥
+#   BACKUP_PASSPHRASE     你自己定的一串长口令（用来加密备份；丢了就解不开，请存进密码管理器）
+name: Supabase backup
+
+on:
+  schedule:
+    - cron: "23 20 * * *"   # 每天 20:23 (UTC) ＝ 马来西亚凌晨 04:23
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 导出并加密
+        env:
+          SUPABASE_URL: https://cogxtzduusuzjumsdkxy.supabase.co
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: bash scripts/backup-supabase.sh
+      - name: 上传加密备份
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-backup-${{ github.run_id }}
+          path: backup/*.gpg
+          retention-days: 90
+          if-no-files-found: error
