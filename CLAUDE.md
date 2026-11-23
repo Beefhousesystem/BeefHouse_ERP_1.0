@@ -878,7 +878,7 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 
 ## 防止 Supabase 免费版被暂停（2026-11-13）
 - 起因：业主收到 Supabase「项目将被暂停」的提醒。免费版项目约一周没有任何访问就会被暂停；只要有定期的数据库请求就不会。
-- 做法：新增 `.github/workflows/supabase-keepalive.yml`——GitHub Actions 每 3 天向牛室 Supabase 发一次只读请求（`erp_users?select=email&limit=1`，匿名读不到资料，回 `[]` 即正常）；用的是 `index.html` 里本来就公开的网址和 publishable key，没有任何密钥。也可在 GitHub → Actions 手动 Run workflow。回应不是 2xx 时这次运行会标红（GitHub 会寄邮件），提示项目可能已被暂停。
+- 做法：新增 `.github/workflows/supabase-keepalive.yml`——GitHub Actions 每 12 小时向牛室 Supabase 发一次只读请求（2026-11-23 起；原为每 3 天）（`erp_users?select=email&limit=1`，匿名读不到资料，回 `[]` 即正常）；用的是 `index.html` 里本来就公开的网址和 publishable key，没有任何密钥。也可在 GitHub → Actions 手动 Run workflow。回应不是 2xx 时这次运行会标红（GitHub 会寄邮件），提示项目可能已被暂停。
 - 要注意：①GitHub 对**太久没有任何提交的仓库**会自动停掉定时任务（约 60 天），本仓库一直有更新所以没事；②已经被暂停的项目要到 Supabase 后台手动 Restore，这个定时任务救不了已暂停的；③明记的 Supabase 项目（`kmcdokwiyetlmsrdlgqw`）要在明记仓库里加同样的 workflow（换成明记的网址和 key），由明记 ERP 的对话处理。
 
 ## 自动备份 Supabase 数据（2026-11-23）
@@ -889,3 +889,8 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 - 脚本已用本地模拟的 PostgREST 测过：分页、加密/解密、错误口令解不开、密钥错/空库会失败、缺 Secrets 会提示。**还没对真实 Supabase 跑过**（本环境连不上），第一次手动运行要业主确认。
 - 没备份到的：Storage 文件、`auth.users`。恢复脚本还没写（业主需要时再做，先小范围试）。
 - 复制给明记：明记 Supabase 项目同样需要（换网址、两个 Secrets；`erp_store`/`erp_users` 表结构相同，另外还有官网的 `web_*` 表要不要一起备份要问业主）。
+
+### 追加：keep-alive 改成每 12 小时一次 + 防止 GitHub「60 天无动静停定时任务」（2026-11-23）
+- 业主要求每 12 小时检查一次；`supabase-keepalive.yml` 的 cron 改为 `17 3,15 * * *`（UTC 03:17 和 15:17）。
+- GitHub 规定**公开仓库连续 60 天没有活动，定时任务会被自动停用**。该工作流每次跑完，会用 `gh workflow enable` 对 `supabase-keepalive.yml` 和 `supabase-backup.yml` 各重新「启用」一次（权限 `actions: write`，`continue-on-error`，失败不影响 Supabase 检查结果），借此重置这个计时。**这是公认的做法，但我没办法在这里实测 GitHub 的行为**；业主平时仍会提交代码（每次提交也会重置计时），双重保险。
+- 如果有一天定时任务真的被停了（Actions 页面会显示 "disabled due to inactivity" 的提示），点 Enable workflow 即可；Supabase 若已被暂停要去后台 Restore。

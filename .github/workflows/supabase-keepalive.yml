@@ -1,12 +1,17 @@
-# 防止 Supabase 免费版项目因「一周没有访问」被暂停：每 3 天向牛室的 Supabase 发一个很小的读取请求。
+# 防止 Supabase 免费版项目因「一周没有访问」被暂停：每 12 小时向牛室的 Supabase 发一个很小的读取请求。
+# 另外：GitHub 规定公开仓库连续 60 天没有任何动静，定时任务会被自动停掉；所以这个工作流每次跑完，
+# 会顺手对自己和备份工作流重新执行一次「启用」，让这个 60 天的计时一直被重置。
 # 网址和 key 都是 index.html 里本来就公开的（publishable key，设计上可公开）；这里没有任何密钥。
 # 请求只读 1 行（受数据库权限保护，匿名访问读不到任何资料，回 [] 就是正常），不会改任何数据。
 name: Supabase keep-alive
 
 on:
   schedule:
-    - cron: "17 3 */3 * *"   # 每 3 天 03:17 (UTC) 一次
+    - cron: "17 3,15 * * *"  # 每 12 小时一次：03:17 和 15:17 (UTC)
   workflow_dispatch: {}       # 也可以在 GitHub 的 Actions 页面手动按 Run workflow
+
+permissions:
+  actions: write   # 只用来重新「启用」本仓库的定时工作流
 
 jobs:
   ping:
@@ -26,3 +31,12 @@ jobs:
             echo "::error::Supabase 没有正常回应 (HTTP $code)。项目可能已被暂停，请到 Supabase 后台点 Restore。"
             exit 1
           fi
+      - name: 重置「60 天无动静就停定时任务」的计时
+        continue-on-error: true   # 这一步失败不影响上面的 Supabase 检查结果
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          for wf in supabase-keepalive.yml supabase-backup.yml; do
+            gh workflow enable "$wf" && echo "已确认启用：$wf"
+          done
