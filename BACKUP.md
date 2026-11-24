@@ -15,8 +15,9 @@
 
 ## 怎么打开备份
 下载后解压得到 `beefhouse-日期.json.gpg`，在电脑终端执行（会问口令）：
+（Windows 也可以直接双击 .json.gpg，用 Gpg4win 自带的 Kleopatra 解密；PowerShell 里不要用 `>`，会变乱码，所以用 `-o`。）
 ```bash
-gpg -d beefhouse-20261123-202300.json.gpg > backup.json
+gpg -o backup.json -d beefhouse-20261123-202300.json.gpg
 ```
 `backup.json` 里是 `{ exported_at, tables: { erp_store:[…], erp_users:[…] } }`。
 
