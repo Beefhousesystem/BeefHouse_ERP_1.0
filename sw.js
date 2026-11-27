@@ -3,11 +3,10 @@
    以及"网络优先"抓取——每次打开 App 只要手机有网，就直接去服务器
    要最新的 index.html，不会死抱着旧的缓存不放；只有离线的时候才退回
    用缓存(离线也能打开，不会白屏)。缓存名字带版本号，每次改版跟着
-   index.html 的 BUILD 一起手动升级，旧版本缓存会在 activate 时自动清掉。
-   (跟明记那套用同一个架构，方便两边比对/一起维护。) */
-const SW_VERSION = '1104b'; // ⚠️ 跟 index.html 的 BUILD 一起手动升级，保持一致
+   index.html 的 BUILD 一起手动升级，旧版本缓存会在 activate 时自动清掉。 */
+const SW_VERSION = '1127a'; // ⚠️ 跟 index.html 的 BUILD 一起手动升级，保持一致
 const CACHE_NAME = 'beefhouse-erp-' + SW_VERSION;
-const CORE_ASSETS = ['./', './index.html', './order-data.js', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-update.png'];
+const CORE_ASSETS = ['./', './index.html', './order-data.js', './i18n.js', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './icon-update.png'];
 
 self.addEventListener('install', e => {
   self.skipWaiting(); // 新版本装好立刻生效，不等旧分页全部关掉
@@ -44,9 +43,14 @@ self.addEventListener('push', event => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch (e) { data = { body: event.data && event.data.text() }; }
   const title = data.title || '🔔 新订单 New Order';
-  const options = { body: data.body || '', tag: data.tag || 'order', renotify: true, requireInteraction: true, vibrate: [300, 120, 300, 120, 300], data: { url: data.url || './' } };
+  const isVer = data.kind === 'version';
+  const options = { body: data.body || '', tag: data.tag || 'order', renotify: true, requireInteraction: !isVer, vibrate: [300, 120, 300, 120, 300], data: { url: data.url || './' } };
   if (data.icon) { options.icon = data.icon; options.badge = data.icon; }
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(Promise.all([
+    self.registration.showNotification(title, options),
+    // 新版本通知：App 开着的话马上叫页面去检查更新（不用等 5 分钟的定时检查）
+    isVer ? self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => list.forEach(c => c.postMessage({ type: 'version' }))) : null
+  ]));
 });
 
 // 点通知 → 打开/聚焦网站

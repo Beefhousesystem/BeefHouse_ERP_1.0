@@ -6,8 +6,8 @@
   <script>
     // 检测如果跳转到了根目录但带有 hash token，自动重定向到真实仓库路径
     var currentHash = window.location.hash;
-    var repoPath = '/ERP-testing-1.0/';
-    if (!window.location.pathname.includes('ERP-testing-1.0')) {
+    var repoPath = '/BeefHouse_ERP_1.0/';
+    if (!window.location.pathname.includes('BeefHouse_ERP_1.0')) {
       window.location.replace(window.location.origin + repoPath + currentHash);
     }
   </script>

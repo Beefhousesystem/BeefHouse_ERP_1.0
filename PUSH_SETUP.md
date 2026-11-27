@@ -1,5 +1,8 @@
 # 📲 手机后台推送 + 安装成 App（设置指南）
 
+> ⚠️ 2026-11-27 起牛室改用明记版代码：推送函数 `supabase/functions/send-order-push/index.ts` 也换成明记那一版（多了跨店调拨通知、订货单状态通知、每日提醒），**要重新部署一次**；Secret `ALLOWED_ORIGINS` 照旧。每日提醒另见 `PUSH_DIGEST_SETUP.md`（可不做）。
+
+
 目标：**关掉网页/App 后**，老板与区域副经理的手机也能收到「新订单」通知 + 提示音。
 
 ---
