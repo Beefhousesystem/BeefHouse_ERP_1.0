@@ -31,6 +31,19 @@ jobs:
             echo "::error::Supabase 没有正常回应 (HTTP $code)。项目可能已被暂停，请到 Supabase 后台点 Restore。"
             exit 1
           fi
+      - name: 安全检查：没登录的人读不到任何资料（读到就变红、GitHub 会寄邮件）
+        env:
+          SUPABASE_URL: https://cogxtzduusuzjumsdkxy.supabase.co
+          SUPABASE_KEY: sb_publishable_0BSR2rrDXtWGDc_5IgYJmw_4xveik9c
+        run: |
+          bad=0
+          for t in erp_store erp_users erp_push_subs erp_invite_codes; do
+            body=$(curl -sS --max-time 30 "$SUPABASE_URL/rest/v1/$t?select=*&limit=1" -H "apikey: $SUPABASE_KEY" -H "Authorization: Bearer $SUPABASE_KEY" || true)
+            echo "$t → $(echo "$body" | head -c 80)"
+            case "$body" in \[\{*) echo "::error::$t 没登录就读得到资料！"; bad=1;; esac
+          done
+          if [ "$bad" = 1 ]; then exit 1; fi
+          echo "OK：没登录读不到任何表"
       - name: 重置「60 天无动静就停定时任务」的计时
         continue-on-error: true   # 这一步失败不影响上面的 Supabase 检查结果
         env:

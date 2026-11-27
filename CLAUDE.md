@@ -29,7 +29,7 @@
 - 新增的（明记有的）：效期管理、温度检查、批量操作、跨店调拨申请制（`erpv2:req:*`）、中央订货表独立 key（`erpv2:ckorder`）、越南文/缅甸文（`i18n.js`）、一天四次打卡、各分店排行、通知中心、菜单工程等，详见明记仓库 CLAUDE.md。
 
 ### 版本 / 部署
-- **当前版本 `BUILD="1127a"`**，`sw.js` 的 `SW_VERSION` 同步（脚本会一起改）。以后格式照旧 `MMDD` + 字母。
+- **当前版本 `BUILD="1127b"`**（同步到明记 `1111mk162`，commit `f76d9ed`），`sw.js` 的 `SW_VERSION` 同步（脚本会一起改）。以后格式照旧 `MMDD` + 字母。
 - GitHub Pages，**直接推 `main` 就上线**。牛室网址业主推测是 `https://beefhousesystem.github.io/BeefHouse_ERP_1.0/`，**还没确认**（推送函数的 `ALLOWED_ORIGINS` 和 `notify-update.yml` 都用这个）。
 - 流程：同步/改脚本 → 语法检查（`node --check sw.js i18n.js` + 抽出 `<script>` 跑 `new Function`）→ Playwright 测（每个岗位每一页都打开一次，桌面 1400×900 + 手机 393×852）→ 中文提交 → 推 `main` → 本文件按日期追加一条。
 
@@ -38,6 +38,7 @@
 - `supabase-schema.sql` **作废，不要再跑**（会装回旧触发器和旧规则）。
 - 注册方式（照明记）：执行董事/人事经理在「设置 → 白名单」先加邮箱，对方用同一邮箱注册就能进，不用邀请码；没加名单的人可以用邀请码注册（码对应岗位+分店）。换码：SQL Editor 跑 `delete from public.erp_invite_codes;` 再跑一次 `bh-erp-upgrade.sql`。
 - 推送函数 `send-order-push` 换成明记版（跨店调拨/订货单状态/每日提醒），要重新部署（Verify JWT 关），Secrets：`VAPID_*`、`ALLOWED_ORIGINS`、可选 `CRON_SECRET`（每日提醒 + 版本更新推送，见 `PUSH_DIGEST_SETUP.md`；`notify-update.yml` 没设 `CRON_SECRET` 会自动跳过）。
+- **安全检查**：`tools/check-security.sql`（只读，一张表 11 项，全 ✅ 才算安全；Supabase SQL Editor 只显示最后一段查询，所以合成一个查询）。`supabase-keepalive.yml` 每 12 小时也会用匿名 key 去读 4 张表，读得到资料就变红。
 - 还要手动的：Authentication → Email → 打开「Confirm email」；Redirect URLs 放牛室网址。
 - GitHub Actions：`supabase-keepalive.yml`（每 12 小时）、`supabase-backup.yml`（每天加密备份，见 `BACKUP.md`）、`notify-update.yml`（明记搬来的）。
 
@@ -891,3 +892,10 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
   4. 用新版 `index.html` 当来源再跑一次同步脚本，输出完全一样。
 - **headless 测不出的**：真实 Supabase 登录、推送、iPhone 实机。要业主实机确认。
 - 业主要做：跑 `bh-erp-upgrade.sql`（记下结果里的新邀请码）→ 重新部署 `send-order-push` → 用执行董事账号登录一次（触发薪资格式转换）→ 手机实测。
+
+## 安全复查 + 同步明记到 mk162（2026-11-27，BUILD 1127b）
+- 业主已跑 `bh-erp-upgrade.sql`（7 个新邀请码已生成，只在业主手上）、已重新部署 `send-order-push`（`?health=1` 回 `{"ok":true,…,"digest":false}`，每日提醒没开所以 digest 是 false，正常）。
+- 新增 `tools/check-security.sql`（牛室版，比明记那份多：邀请码表读取权、旧触发器是否拿掉、岗位代号、空分店、创办人账号、函数语言）。在本机模拟库验证：正常 11 项全 ✅；故意加一条宽松规则 + 改错一个岗位代号，对应两项变 ❌。
+- `supabase-keepalive.yml` 加上明记的「匿名读不到 erp_store/erp_users/erp_push_subs/erp_invite_codes」检查。
+- 同步明记 `2e34393`→`f76d9ed`：mk160 云端保存改成三方合并 + 存不上云端红条提示自动重试；mk161 红条翻译；mk162 进货数量清空时单价即时消失、温度检查移到中央厨房下面。脚本全部替换点都对上，没改脚本。合并逻辑测过：会保留牛室独有字段（例如 `ledger`/`fixedAssets`）。
+- 验证：语法检查；9 岗位 × 每页 × 桌面/手机无报错；旧版牛室数据载入新版不丢字段、薪资发放记录保留。
