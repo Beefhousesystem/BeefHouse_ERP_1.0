@@ -366,7 +366,7 @@ html.ui2[data-theme="mech"] #aiBall .eye{animation:aiEye 2.6s ease-in-out infini
 #aiBallMenu button.dn{color:#d92d20;}
 
 /* ================= 界面样式（BUILD 1111mk73）：三套主题，用 <html data-theme="..."> 切换 =================
-   classic  = Default 默认（暖象牙底 + 牛室酒红 + 金色点缀）
+   classic  = Default 默认（牛室：蓝色为主、白色为辅，见下面「牛室 Default」那段）
    mech     = 机械风（钢灰 + 工业橙 + 等宽字 + 直角 + 警示条纹）
    cn       = 中式风（宣纸米色 + 朱红 + 金 + 墨黑，回纹/窗格/印章）
    所有颜色/圆角/字体都走下面的变量，三套主题只是换变量 + 少量装饰。旧界面已移除，html 固定带 class="ui2"。 */
@@ -384,6 +384,18 @@ html.ui2{
   --font-body:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans SC","Microsoft YaHei","Segoe UI",system-ui,sans-serif;
   --font-head:"Iowan Old Style","Palatino Linotype",Georgia,"Songti SC",serif;--font-num:"Iowan Old Style","Palatino Linotype",Georgia,"Songti SC",serif;
   --ease:cubic-bezier(.2,.7,.2,1);
+}
+/* ---- 牛室 Default：蓝色为主、白色为辅（只换颜色变量，版面不动；由 tools/port-from-mengkee.py 加进来） ---- */
+html.ui2[data-theme="classic"]{
+  --ink:#0F2336;--ink2:#34506B;--paper:#DCE9F6;--card:#FFFFFF;--line:#C6D8EB;--line2:#AFC6DD;
+  --brand:#0F5A8C;--brand2:#1F72AB;--brand-dk:#0A3F63;--gold:#2E86C1;--red:#C0392B;--amber:#A8731A;--green:#2E7D52;
+  --blue:#1F72AB;--purple:#5B5FA8;--grey:#5F7489;--soft:#EAF2FA;--hover:#D6E5F4;--row-hover:#F3F8FD;--row-line:#E3EDF7;--hint-bg:#E8F1FA;
+  --btn:#0F5A8C;--btn-hover:#0A3F63;--focus:rgba(15,90,140,.18);--shadow-bub:rgba(15,90,140,.4);
+  --top-bg:#0B3D5F;--top-solid:#0B3D5F;--top-ink:#FFFFFF;--top-line:#0B3D5F;--top-btn-bg:rgba(255,255,255,.12);--top-btn-line:rgba(255,255,255,.35);--top-btn-hover:rgba(255,255,255,.22);
+  --sel-bg:rgba(255,255,255,.14);--sel-ink:#FFFFFF;--sel-line:rgba(255,255,255,.45);
+  --side-bg:#0F4A73;--side-ink:#D6E6F5;--side-hover:rgba(255,255,255,.10);--side-active-bg:#FFFFFF;--side-active-ink:#0B3D5F;--side-bar:#FFFFFF;--side-icon-on:#0F5A8C;--side-grp:#9DBEDB;
+  --th-ink:#3E5F80;--th-line:#C6D8EB;--tab-bg:rgba(255,255,255,.97);
+  --grid-line:#C3D5E8;--grid-line2:#AFC6DD;--grid-head:#E3EDF7;--grid-c1:#F3F8FD;--grid-c2:#EAF2FA;--grid-lab:#D6E5F4;
 }
 /* ---- 机械风：钢灰 + 工业橙 + 警示黄，直角、等宽、螺丝、硬阴影 ---- */
 html.ui2[data-theme="mech"]{
@@ -1494,7 +1506,7 @@ function statusOf(d){if(d<=14)return{t:"健康",e:"Fresh",c:"p-g"};if(d<=30)retu
 function stTxt(s){return LANG==="zh"?s.t:s.e;}
 
 /* ================= 数据种子 ================= */
-const BUILD="1127c";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
+const BUILD="1127d";  // 版本标记：页面右上/网格提示可见，用来确认已载入最新版
 const SEED_VERSION="bh-master-2026-09-1";  // 版本变更→下次载入自动重置为最新主数据（仅本店云端）
 function seed(outletId){
   const isCK = outletId==="ck";
@@ -7874,7 +7886,7 @@ function skelHTML(){return '<div class="skel-wrap"><div class="skel-b" style="he
    做三件事：① 把表情符号换成统一的线条图标；② 手机顶栏收成一行（次要按钮收进「⋯」）；③ 手机底部导航。
    用 MutationObserver 统一处理，不用逐页改动原来的页面代码。 */
 const UI2=true; // 旧界面已移除，一直是新界面（样式在 <style id="ui2css">，三套主题）
-const UI2_THEMES={classic:{zh:'Default 默认',en:'Default',desc:'暖象牙底、牛室酒红、金色点缀；安静、有质感',color:'#FAF8F3',sw:['#7C1619','#B68A2C','#FAF8F3','#221C1A']},
+const UI2_THEMES={classic:{zh:'Default 默认',en:'Default',desc:'牛室蓝：蓝色为主、白色为辅；清爽、好读',color:'#0B3D5F',sw:['#0B3D5F','#0F5A8C','#DCE9F6','#FFFFFF']},
   mech:{zh:'机械风',en:'Industrial',desc:'钢板灰、螺丝铆钉、警示条纹、等宽字、仪表数字；很硬核的机械感',color:'#14181C',sw:['#E8601C','#14181C','#B9C0C7','#F2B417']},
   cn:{zh:'中式风',en:'Chinese',desc:'宣纸米色、朱红与金、回纹窗格、印章标题、宋体；典雅的中式味道',color:'#8F1C14',sw:['#8F1C14','#C79A2B','#F6EEDC','#2A1A14']}};
 function ui2Theme(){const t=document.documentElement.getAttribute('data-theme');return UI2_THEMES[t]?t:'classic';}

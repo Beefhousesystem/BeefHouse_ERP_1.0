@@ -130,6 +130,26 @@ s = sub1(s, '<link rel="apple-touch-icon" href="apple-touch-icon.png">', '<link 
 s = sub1(s, '<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">', '<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=bh2">')
 s = sub1(s, '<link rel="icon" href="icon-192.png" sizes="192x192">', '<link rel="icon" href="icon-192.png?v=bh2" sizes="192x192">')
 
+# ---------- 4c. 牛室的 Default 主题：蓝色为主、白色为辅（业主 2026-11-27 要求；明记的 Default 是象牙底+酒红） ----------
+BH_BLUE_CSS = """/* ---- 牛室 Default：蓝色为主、白色为辅（只换颜色变量，版面不动；由 tools/port-from-mengkee.py 加进来） ---- */
+html.ui2[data-theme="classic"]{
+  --ink:#0F2336;--ink2:#34506B;--paper:#DCE9F6;--card:#FFFFFF;--line:#C6D8EB;--line2:#AFC6DD;
+  --brand:#0F5A8C;--brand2:#1F72AB;--brand-dk:#0A3F63;--gold:#2E86C1;--red:#C0392B;--amber:#A8731A;--green:#2E7D52;
+  --blue:#1F72AB;--purple:#5B5FA8;--grey:#5F7489;--soft:#EAF2FA;--hover:#D6E5F4;--row-hover:#F3F8FD;--row-line:#E3EDF7;--hint-bg:#E8F1FA;
+  --btn:#0F5A8C;--btn-hover:#0A3F63;--focus:rgba(15,90,140,.18);--shadow-bub:rgba(15,90,140,.4);
+  --top-bg:#0B3D5F;--top-solid:#0B3D5F;--top-ink:#FFFFFF;--top-line:#0B3D5F;--top-btn-bg:rgba(255,255,255,.12);--top-btn-line:rgba(255,255,255,.35);--top-btn-hover:rgba(255,255,255,.22);
+  --sel-bg:rgba(255,255,255,.14);--sel-ink:#FFFFFF;--sel-line:rgba(255,255,255,.45);
+  --side-bg:#0F4A73;--side-ink:#D6E6F5;--side-hover:rgba(255,255,255,.10);--side-active-bg:#FFFFFF;--side-active-ink:#0B3D5F;--side-bar:#FFFFFF;--side-icon-on:#0F5A8C;--side-grp:#9DBEDB;
+  --th-ink:#3E5F80;--th-line:#C6D8EB;--tab-bg:rgba(255,255,255,.97);
+  --grid-line:#C3D5E8;--grid-line2:#AFC6DD;--grid-head:#E3EDF7;--grid-c1:#F3F8FD;--grid-c2:#EAF2FA;--grid-lab:#D6E5F4;
+}
+"""
+s = sub1(s, '/* ---- 机械风：钢灰', BH_BLUE_CSS + '/* ---- 机械风：钢灰')
+s = re.sub(r"classic:\{zh:'Default 默认',en:'Default',desc:'[^']*',color:'#[0-9A-Fa-f]+',sw:\[[^\]]*\]\}",
+           "classic:{zh:'Default 默认',en:'Default',desc:'牛室蓝：蓝色为主、白色为辅；清爽、好读',color:'#0B3D5F',sw:['#0B3D5F','#0F5A8C','#DCE9F6','#FFFFFF']}", s, count=1)
+must("desc:'牛室蓝" in s, 'UI2_THEMES.classic 没换到')
+s = s.replace('classic  = Default 默认（暖象牙底 + 牛室酒红 + 金色点缀）', 'classic  = Default 默认（牛室：蓝色为主、白色为辅，见下面「牛室 Default」那段）')
+
 # ---------- 5. 版本号 ----------
 s = re.sub(r'const BUILD="[^"]+";', f'const BUILD="{BUILD}";', s, count=1)
 
