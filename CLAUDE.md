@@ -899,3 +899,7 @@ where tgrelid='auth.users'::regclass and not t.tgisinternal;
 - `supabase-keepalive.yml` 加上明记的「匿名读不到 erp_store/erp_users/erp_push_subs/erp_invite_codes」检查。
 - 同步明记 `2e34393`→`f76d9ed`：mk160 云端保存改成三方合并 + 存不上云端红条提示自动重试；mk161 红条翻译；mk162 进货数量清空时单价即时消失、温度检查移到中央厨房下面。脚本全部替换点都对上，没改脚本。合并逻辑测过：会保留牛室独有字段（例如 `ledger`/`fixedAssets`）。
 - 验证：语法检查；9 岗位 × 每页 × 桌面/手机无报错；旧版牛室数据载入新版不丢字段、薪资发放记录保留。
+
+## 主屏幕图标：网址加版本号（2026-11-27，BUILD 1127c）
+- 业主截图：iPhone 主屏幕上的牛室图标四周有白边、深蓝外框（是 2026-09-25 裁图之前的旧图标）。仓库里的 `apple-touch-icon.png`/`icon-*.png` 早就是填满的；iPhone 在「加到主屏幕」那一刻就把图标存起来，之后不会自动更新。
+- 同步脚本加了一段：`apple-touch-icon.png`、`icon-192.png` 的网址加 `?v=bh2`，避免 Safari 拿旧缓存。**业主要删掉主屏幕上的牛室图标、重新「加到主屏幕」才会换成新的**（这是 iOS 的限制，代码改不了）。

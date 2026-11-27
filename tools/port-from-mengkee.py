@@ -125,6 +125,11 @@ for old, new in [('明记家乡小食店 · Meng Kee', '牛室炙烤牛排 · Be
                  ('明记', '牛室')]:
     s = s.replace(old, new)
 
+# ---------- 4b. 图标网址加版本号：iPhone/Safari 不会拿旧的缓存图标（牛室旧图标有白边） ----------
+s = sub1(s, '<link rel="apple-touch-icon" href="apple-touch-icon.png">', '<link rel="apple-touch-icon" href="apple-touch-icon.png?v=bh2">')
+s = sub1(s, '<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">', '<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=bh2">')
+s = sub1(s, '<link rel="icon" href="icon-192.png" sizes="192x192">', '<link rel="icon" href="icon-192.png?v=bh2" sizes="192x192">')
+
 # ---------- 5. 版本号 ----------
 s = re.sub(r'const BUILD="[^"]+";', f'const BUILD="{BUILD}";', s, count=1)
 
